@@ -9,6 +9,7 @@ create table public.daily_state (
   algo_name text,
   is_locked boolean default false,
   is_running boolean default false,
+  upstox_token text,
   created_at timestamptz default now()
 );
 
