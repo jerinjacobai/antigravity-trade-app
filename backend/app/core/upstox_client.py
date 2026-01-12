@@ -19,9 +19,8 @@ class UpstoxClient:
     def _fetch_credentials(self):
         """Fetch API Key/Secret from Supabase user_credentials."""
         try:
-             # For V1, we just pick the first user found or use a hardcoded ID if multi-tenant
-             # In a real worker, we might loop through all active users.
-             # Here we assume single-user deployment for simplicity.
+             # Phase 3: Check user_credentials (legacy) or user_profiles (future)
+             # For now, we still rely on the single user credentials concept for the Worker
              response = supabase.table("user_credentials").select("*").limit(1).execute()
              if response.data:
                  creds = response.data[0]
@@ -33,11 +32,19 @@ class UpstoxClient:
         return False
 
     def _fetch_token_from_db(self):
-        """Fetch the latest access token from Supabase daily_state."""
+        """Fetch the latest access token from user_profiles."""
         try:
+             # Phase 3: Fetch from user_profiles
+             # We look for a profile that has trading_enabled=True OR just the first one for MVP
+             response = supabase.table("user_profiles").select("upstox_access_token").limit(1).execute()
+             if response.data and response.data[0].get("upstox_access_token"):
+                 return response.data[0]["upstox_access_token"]
+                 
+             # Fallback to daily_state (Phase 2 legacy)
              response = supabase.table("daily_state").select("upstox_token").eq("date", "now()").execute()
              if response.data and response.data[0].get("upstox_token"):
                  return response.data[0]["upstox_token"]
+                 
         except Exception as e:
             logger.error(f"Failed to fetch Upstox token from DB: {e}")
         return None

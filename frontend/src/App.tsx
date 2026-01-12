@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import Auth from './components/Auth';
 import LandingPage from './pages/LandingPage';
 import Settings from './pages/Settings';
+import UpstoxCallback from './pages/UpstoxCallback';
 import DashboardLayout from './components/DashboardLayout';
 import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
@@ -48,6 +49,7 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/select-algo" element={<AlgoSelection />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/callback" element={<UpstoxCallback />} />
         </Route>
       </Routes>
     </BrowserRouter>

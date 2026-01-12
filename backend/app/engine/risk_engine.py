@@ -16,6 +16,21 @@ class RiskEngine:
         """
         Global Risk Checks before any trade entry.
         """
+        # 0. Sync Limits from DB (Dynamic)
+        try:
+            from app.core.supabase_client import supabase
+            response = supabase.table("user_profiles").select("max_loss_limit, max_trades_limit, kill_switch_active").limit(1).execute()
+            if response.data:
+                profile = response.data[0]
+                if profile.get("kill_switch_active"):
+                    logger.critical("🚨 TRADE REJECTED: KILL SWITCH ACTIVE 🚨")
+                    return False
+                # Update local limits
+                self.max_trades_per_day = profile.get("max_trades_limit", 25)
+                # self.max_daily_loss_pct = ... (Need to convert currency limit to text or pct in future)
+        except Exception as e:
+            logger.error(f"Risk Sync Error: {e}")
+
         # 1. Time Check
         now = datetime.now().time()
         if now >= self.hard_stop_time:
