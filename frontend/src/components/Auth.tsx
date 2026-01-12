@@ -8,18 +8,29 @@ const Auth = () => {
     const [password, setPassword] = useState('');
     const navigate = useNavigate();
 
-    const handleLogin = async (e: React.FormEvent) => {
+    const [isLogin, setIsLogin] = useState(true);
+
+    const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        const { error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-        });
 
-        if (error) {
-            alert(error.message);
+        if (isLogin) {
+            const { error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+            if (error) alert(error.message);
+            else navigate('/select-algo');
         } else {
-            navigate('/select-algo');
+            const { error } = await supabase.auth.signUp({
+                email,
+                password,
+            });
+            if (error) alert(error.message);
+            else {
+                alert('Registration successful! Please check your email or login directly if verification is disabled.');
+                setIsLogin(true);
+            }
         }
         setLoading(false);
     };
@@ -28,9 +39,9 @@ const Auth = () => {
         <div className="flex min-h-screen items-center justify-center bg-black text-white">
             <div className="w-full max-w-md p-8 space-y-6 bg-zinc-900 rounded-xl border border-zinc-800">
                 <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                    QuantMind Login
+                    {isLogin ? 'QuantMind Login' : 'Create Account'}
                 </h2>
-                <form onSubmit={handleLogin} className="space-y-4">
+                <form onSubmit={handleAuth} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-zinc-400">Email</label>
                         <input
@@ -56,9 +67,20 @@ const Auth = () => {
                         className="w-full py-3 font-semibold text-black bg-blue-500 rounded-lg hover:bg-blue-400 transition-colors"
                         disabled={loading}
                     >
-                        {loading ? 'Logging in...' : 'Enter Terminal'}
+                        {loading ? 'Processing...' : (isLogin ? 'Enter Terminal' : 'Register Account')}
                     </button>
-                    <p className="text-xs text-center text-zinc-500">
+
+                    <div className="text-center pt-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsLogin(!isLogin)}
+                            className="text-sm text-zinc-400 hover:text-white underline"
+                        >
+                            {isLogin ? 'Need an account? Sign Up' : 'Already have an account? Login'}
+                        </button>
+                    </div>
+
+                    <p className="text-xs text-center text-zinc-500 mt-4">
                         Restricted Access. Authorized Personnel Only.
                     </p>
                 </form>
