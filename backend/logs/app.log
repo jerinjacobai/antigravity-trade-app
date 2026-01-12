@@ -1,0 +1,6 @@
+2026-01-12 15:39:47,931 - antigravity_trader.algo_state_manager - INFO - Loaded daily state: Algo=None, Locked=False
+2026-01-12 15:40:31,368 - antigravity_trader.algo_state_manager - INFO - Algo selected and LOCKED: VPMS
+2026-01-12 15:40:36,842 - antigravity_trader.market_data - INFO - Market Data Service Connected
+2026-01-12 15:40:36,842 - antigravity_trader.base_strategy - INFO - Strategy VPMS - VWAP Momentum STARTED
+2026-01-12 15:40:36,842 - antigravity_trader.market_data - INFO - Starting Market Data Simulation...
+2026-01-12 18:02:29,646 - antigravity_trader.algo_state_manager - INFO - Loaded daily state: Algo=VPMS, Locked=True
