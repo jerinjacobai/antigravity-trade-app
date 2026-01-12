@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+venv
+__pycache__
+*.pyc
+daily_state.json
+logs/
+.DS_Store

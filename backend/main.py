@@ -1,25 +1,53 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import router as api_router
-from app.core.config import settings
+import asyncio
+import os
+from dotenv import load_dotenv
+from app.core.config import get_logger, settings
+from app.core.supabase_client import supabase
+from app.engine.algo_state_manager import algo_state_manager
 
-app = FastAPI(title=settings.APP_NAME)
+# Load Env
+load_dotenv()
+logger = get_logger("worker")
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], # Allow all for dev
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+async def main():
+    logger.info("🚀 Antigravity Algo Worker Starting...")
+    
+    if not supabase:
+        logger.critical("Supabase connection failed. Exiting.")
+        return
 
-app.include_router(api_router, prefix="/api")
-
-@app.get("/")
-def read_root():
-    return {"message": "Antigravity Trading System Online"}
+    # Main Loop
+    while True:
+        try:
+            # 1. Sync State with DB
+            # For V1, we poll every 5 seconds. In V2, use Realtime Subscription.
+            response = supabase.table("daily_state").select("*").eq("date", "now()").execute()
+            data = response.data
+            
+            if data:
+                remote_state = data[0]
+                algo = remote_state.get("algo_name")
+                running = remote_state.get("is_running")
+                
+                if algo and algo != algo_state_manager.selected_algo:
+                    logger.info(f"Received new Algo Command: {algo}")
+                    algo_state_manager.selected_algo = algo
+                    algo_state_manager.is_locked = True
+                
+                if running:
+                    # Run Strategy Step
+                    # In a real event loop, this would tick the strategy
+                    # For demo, we just log heartbeat
+                     pass
+            
+            await asyncio.sleep(5)
+            
+        except Exception as e:
+            logger.error(f"Worker Loop Error: {e}")
+            await asyncio.sleep(5)
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Worker Stopping...")
