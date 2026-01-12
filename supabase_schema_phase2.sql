@@ -1,6 +1,3 @@
--- PHASE 2 MIGRATION: User Credentials
--- Run this in Supabase SQL Editor
-
 create table if not exists public.user_credentials (
   user_id uuid references auth.users not null primary key,
   upstox_api_key text,
@@ -9,7 +6,6 @@ create table if not exists public.user_credentials (
   updated_at timestamptz default now()
 );
 
--- RLS Policies
 alter table public.user_credentials enable row level security;
 
 create policy "Users can view own credentials" 
