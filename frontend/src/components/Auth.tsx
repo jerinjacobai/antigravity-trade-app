@@ -28,7 +28,7 @@ const Auth = () => {
         <div className="flex min-h-screen items-center justify-center bg-black text-white">
             <div className="w-full max-w-md p-8 space-y-6 bg-zinc-900 rounded-xl border border-zinc-800">
                 <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                    Antigravity Login
+                    QuantMind Login
                 </h2>
                 <form onSubmit={handleLogin} className="space-y-4">
                     <div>

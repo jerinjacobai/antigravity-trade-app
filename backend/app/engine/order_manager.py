@@ -28,7 +28,7 @@ class OrderManager:
                 "product": "I", # Intraday
                 "validity": "DAY",
                 "price": price,
-                "tag": "antigravity_algo",
+                "tag": "quantmind_algo",
                 "instrument_token": symbol, # Needs correct Instrument Key
                 "order_type": order_type,
                 "transaction_type": transaction_type,

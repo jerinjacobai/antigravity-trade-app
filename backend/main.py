@@ -10,7 +10,7 @@ load_dotenv()
 logger = get_logger("worker")
 
 async def main():
-    logger.info("🚀 Antigravity Algo Worker Starting...")
+    logger.info("🚀 QuantMind Algo Worker Starting...")
     
     if not supabase:
         logger.critical("Supabase connection failed. Exiting.")

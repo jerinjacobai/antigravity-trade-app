@@ -69,7 +69,7 @@ const Dashboard = () => {
             <header className="flex justify-between items-center mb-6 border-b border-zinc-900 pb-4">
                 <div className="flex items-center gap-3">
                     <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_#22c55e]" />
-                    <h1 className="text-xl font-bold tracking-tight">LIVE TERMINAL</h1>
+                    <h1 className="text-xl font-bold tracking-tight">QUANTMIND <span className="text-zinc-500">TERMINAL</span></h1>
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="px-3 py-1 rounded bg-zinc-900 border border-zinc-800 text-xs text-zinc-400">

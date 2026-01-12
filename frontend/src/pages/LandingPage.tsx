@@ -12,7 +12,7 @@ export default function LandingPage() {
                 <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <div className="h-4 w-4 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500" />
-                        <span className="font-bold tracking-tight text-lg">ANTIGRAVITY</span>
+                        <span className="font-bold tracking-tight text-lg">QuantMind</span>
                     </div>
                     <div className="flex gap-4">
                         <button
@@ -137,7 +137,7 @@ export default function LandingPage() {
 
             {/* Footer */}
             <footer className="py-8 text-center text-zinc-600 text-sm border-t border-white/5">
-                © 2024 Antigravity Systems. Built for Retail, Engineered like Insti.
+                © 2024 QuantMind. Built for Retail, Engineered like Insti.
             </footer>
         </div>
     );

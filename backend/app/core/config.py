@@ -4,7 +4,7 @@ from logging.handlers import RotatingFileHandler
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    APP_NAME: str = "Antigravity Trader"
+    APP_NAME: str = "QuantMind Trader"
     ENV: str = "dev"
     UPSTOX_API_KEY: str = ""
     UPSTOX_API_SECRET: str = ""
@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # Setup Logger
-logger = logging.getLogger("antigravity_trader")
+logger = logging.getLogger("quantmind_trader")
 logger.setLevel(settings.LOG_LEVEL)
 
 # Console Handler
@@ -33,4 +33,4 @@ f_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s
 logger.addHandler(f_handler)
 
 def get_logger(name: str):
-    return logging.getLogger(f"antigravity_trader.{name}")
+    return logging.getLogger(f"quantmind_trader.{name}")

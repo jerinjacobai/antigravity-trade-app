@@ -22,7 +22,7 @@ export default function Sidebar() {
             <div className="p-6 border-b border-zinc-900">
                 <div className="flex items-center gap-2">
                     <div className="h-4 w-4 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500" />
-                    <span className="font-bold tracking-tight text-white">ANTIGRAVITY</span>
+                    <span className="font-bold tracking-tight text-white">QuantMind</span>
                 </div>
             </div>
 

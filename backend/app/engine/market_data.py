@@ -60,7 +60,7 @@ class MarketDataService:
 
     async def _subscribe_instruments(self, ws):
         subscription_payload = {
-            "guid": "antigravity_v1",
+            "guid": "quantmind_v1",
             "method": "sub",
             "data": {
                 "mode": "full",
