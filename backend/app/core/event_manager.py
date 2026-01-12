@@ -1,28 +1,47 @@
-import asyncio
-from typing import Callable, Dict, List, Any
+from datetime import datetime
 from app.core.config import get_logger
+from app.core.supabase_client import supabase
+# Simple sync wrapper for basic usage
+# For heavy loads, use a background task queue
 
-logger = get_logger("event_bus")
+logger = get_logger("event_manager")
 
 class EventManager:
-    _subscribers: Dict[str, List[Callable]] = {}
+    def __init__(self):
+        self.subscribers = {}
 
-    @classmethod
-    def subscribe(cls, event_type: str, handler: Callable):
-        if event_type not in cls._subscribers:
-            cls._subscribers[event_type] = []
-        cls._subscribers[event_type].append(handler)
-        logger.debug(f"Subscribed to {event_type} with {handler.__name__}")
+    def subscribe(self, event_type, callback):
+        if event_type not in self.subscribers:
+            self.subscribers[event_type] = []
+        self.subscribers[event_type].append(callback)
 
-    @classmethod
-    async def publish(cls, event_type: str, data: Any = None):
-        if event_type in cls._subscribers:
-            logger.debug(f"Publishing event: {event_type}")
-            for handler in cls._subscribers[event_type]:
+    def publish(self, event_type, data):
+        # 1. Local Broadcast
+        if event_type in self.subscribers:
+            for callback in self.subscribers[event_type]:
                 try:
-                    if asyncio.iscoroutinefunction(handler):
-                        await handler(data)
-                    else:
-                        handler(data)
+                    callback(data)
                 except Exception as e:
-                    logger.error(f"Error handling event {event_type}: {e}", exc_info=True)
+                    logger.error(f"Error in subscriber: {e}")
+
+        # 2. Cloud Persistence (Supabase)
+        # We only persist important logs/events. High-freq ticks are NOT persisted to DB logs.
+        if event_type in ["system_log", "trade_log", "error", "algo_status"]:
+             self._log_to_db(event_type, data)
+
+    def _log_to_db(self, level, message):
+        if not supabase: return
+        try:
+             # If data is a dict, dumping it to string or extracting message
+             msg_content = message if isinstance(message, str) else str(message)
+             
+             supabase.table("trade_logs").insert({
+                 "level": level.upper(),
+                 "message": msg_content,
+                 "timestamp": datetime.now().isoformat()
+             }).execute()
+        except Exception as e:
+            # Fallback to local logger to avoid loops
+            logger.error(f"Supabase Log Failed: {e}")
+
+event_manager = EventManager()

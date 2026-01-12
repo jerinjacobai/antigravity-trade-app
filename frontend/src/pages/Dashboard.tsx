@@ -1,123 +1,163 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import { getSystemStatus, startSimulation } from '../services/api';
-import { Activity, Play, Terminal, Wallet, ShieldAlert } from 'lucide-react';
-// import { cn } from '../lib/utils';
+import { cn } from '../lib/utils';
+import { LineChart, Activity, ShieldAlert, Terminal, Play } from 'lucide-react';
 
-export default function Dashboard() {
-    const [algoState, setAlgoState] = useState<any>(null);
-    const [stats, setStats] = useState<any>({ daily_trades: 0, max_trades: 25 });
-    const [logs, setLogs] = useState<string[]>([]);
-    const [lastTick, setLastTick] = useState<any>(null);
-    const logsEndRef = useRef<HTMLDivElement>(null);
+// Types
+interface Log {
+    timestamp: string;
+    message: string;
+    level: string;
+}
+
+interface Tick {
+    symbol: string;
+    price: number;
+    timestamp: number;
+}
+
+const Dashboard = () => {
+    const [logs, setLogs] = useState<Log[]>([]);
+    const [price, setPrice] = useState<number>(21500.00);
+    const [risk, setRisk] = useState({ pnl: 0, trades: 0, max_trades: 25 });
+    const [activeAlgo, setActiveAlgo] = useState<string | null>(null);
 
     useEffect(() => {
-        // Initial Load
-        getSystemStatus().then(data => {
-            setAlgoState(data.algo_state);
-            setStats(data.risk_stats);
-        });
-
-        // Valid WS URL?
-        const ws = new WebSocket('ws://localhost:8080/api/ws');
-
-        ws.onmessage = (event) => {
-            const msg = JSON.parse(event.data);
-            if (msg.type === 'tick') {
-                setLastTick(msg.data);
-            } else if (msg.type === 'order') {
-                setLogs(prev => [...prev, `[ORDER] ${msg.data.side} ${msg.data.quantity} ${msg.data.symbol} @ ${msg.data.fill_price}`]);
-            }
+        // 1. Initial Fetch
+        const init = async () => {
+            const status = await getSystemStatus();
+            setRisk(prev => ({ ...prev, ...status.risk_stats })); // Merge
+            setActiveAlgo(status.algo_state.algo_name);
         };
+        init();
 
-        return () => ws.close();
+        // 2. Realtime Subscriptions
+        const channel = supabase.channel('dashboard_realtime')
+            // Listen for Logs
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trade_logs' }, (payload) => {
+                const newLog = payload.new as any;
+                setLogs(prev => [{ timestamp: newLog.timestamp, message: newLog.message, level: newLog.level }, ...prev].slice(0, 50));
+            })
+            // Listen for Mock/Real Ticks (Broadcast)
+            .on('broadcast', { event: 'market_tick' }, (payload) => {
+                const tick = payload.payload as Tick;
+                if (tick.symbol.includes('Nifty')) {
+                    setPrice(tick.price);
+                }
+            })
+            // Listen for Orders/Risk Updates (Optional, can poll or subscribe to table)
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, []);
-
-    useEffect(() => {
-        if (logsEndRef.current) {
-            logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
-    }, [logs]);
 
     const handleStart = async () => {
         await startSimulation();
-        setLogs(prev => [...prev, ">> SIMULATION STARTED..."]);
+        // Optimistic Log
+        setLogs(prev => [{ timestamp: new Date().toISOString(), message: "Start Command Sent to Worker", level: "INFO" }, ...prev]);
     };
 
-    if (!algoState) return <div className="text-white p-10">Loading System State...</div>;
-
     return (
-        <div className="min-h-screen bg-background p-6">
-            <header className="flex items-center justify-between mb-8 border-b border-border pb-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                        <Activity className="text-primary" /> Active Terminal
-                    </h1>
-                    <p className="text-text-muted text-sm mt-1">Running Strategy: <span className="text-primary font-mono">{algoState.algo}</span></p>
+        <div className="min-h-screen bg-black text-zinc-100 p-6 font-mono selection:bg-blue-500/30">
+            {/* Header */}
+            <header className="flex justify-between items-center mb-8 border-b border-zinc-800 pb-4">
+                <div className="flex items-center gap-3">
+                    <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_#22c55e]" />
+                    <h1 className="text-xl font-bold tracking-tight">ANTIGRAVITY <span className="text-zinc-500">TERMINAL</span></h1>
                 </div>
                 <div className="flex items-center gap-4">
-                    <div className="text-right">
-                        <div className="text-xs text-text-muted">Total PnL</div>
-                        <div className="text-xl font-bold text-green-500 font-mono">+₹0.00</div>
+                    <div className="px-3 py-1 rounded bg-zinc-900 border border-zinc-800 text-xs">
+                        Strategy: <span className="text-blue-400 font-bold">{activeAlgo || 'LOADING...'}</span>
                     </div>
-                    <button onClick={handleStart} className="btn btn-primary flex items-center gap-2">
-                        <Play size={16} /> Start
+                    <button
+                        onClick={handleStart}
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded text-sm font-semibold transition-all"
+                    >
+                        <Play size={14} /> Start Engine
                     </button>
                 </div>
             </header>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Main Chart Area (Mock) */}
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="card h-64 flex items-center justify-center bg-surface relative overflow-hidden">
-                        {/* Simple visualizer for tick */}
-                        <div className="absolute inset-0 bg-blue-500/5" />
-                        <div className="text-center z-10">
-                            <h2 className="text-text-muted mb-2">LIVE MARKET TICK</h2>
-                            <div className="text-5xl font-mono font-bold text-white">
-                                {lastTick ? lastTick.ltp.toFixed(2) : 'Waiting...'}
-                            </div>
-                            <div className="text-primary text-sm mt-2">{lastTick?.symbol}</div>
+            {/* Grid Layout */}
+            <div className="grid grid-cols-12 gap-6 h-[calc(100vh-140px)]">
+
+                {/* Left Col: Market & Risk */}
+                <div className="col-span-8 flex flex-col gap-6">
+                    {/* Market Ticker */}
+                    <div className="h-1/2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 flex flex-col items-center justify-center relative overflow-hidden">
+                        <div className="absolute top-4 left-4 flex items-center gap-2 text-zinc-400 text-sm">
+                            <LineChart size={16} /> LIVE MARKET
+                        </div>
+                        <div className="text-8xl font-black tracking-tighter bg-gradient-to-b from-white to-zinc-600 bg-clip-text text-transparent">
+                            {price.toFixed(2)}
+                        </div>
+                        <div className="text-green-500 mt-2 font-medium flex items-center gap-2">
+                            NIFTY 50 <span className="text-xs bg-green-500/10 px-2 py-0.5 rounded">+0.45%</span>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="card">
-                            <div className="flex items-center gap-2 mb-2 text-text-muted text-xs uppercase tracking-wide">
-                                <Wallet size={14} /> Risk Budget
+                    {/* Risk Monitor */}
+                    <div className="h-1/2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
+                        <div className="flex items-center gap-2 text-zinc-400 text-sm mb-6">
+                            <ShieldAlert size={16} /> RISK MONITOR
+                        </div>
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="p-4 rounded-lg bg-black border border-zinc-800">
+                                <div className="text-zinc-500 text-xs uppercase mb-1">Daily PnL</div>
+                                <div className={cn("text-2xl font-bold", risk.pnl >= 0 ? "text-green-400" : "text-red-400")}>
+                                    ₹{risk.pnl.toFixed(2)}
+                                </div>
                             </div>
-                            <div className="text-2xl font-bold text-white">100%</div>
-                            <div className="w-full bg-border h-1 mt-2 rounded-full overflow-hidden">
-                                <div className="bg-green-500 w-full h-full" />
+                            <div className="p-4 rounded-lg bg-black border border-zinc-800">
+                                <div className="text-zinc-500 text-xs uppercase mb-1">Trades</div>
+                                <div className="text-2xl font-bold text-white">
+                                    {risk.trades} <span className="text-zinc-600 text-sm">/ {risk.max_trades}</span>
+                                </div>
+                            </div>
+                            <div className="p-4 rounded-lg bg-black border border-zinc-800">
+                                <div className="text-zinc-500 text-xs uppercase mb-1">Status</div>
+                                <div className="text-2xl font-bold text-blue-400">ACTIVE</div>
                             </div>
                         </div>
-                        <div className="card">
-                            <div className="flex items-center gap-2 mb-2 text-text-muted text-xs uppercase tracking-wide">
-                                <ShieldAlert size={14} /> Daily Trades
+                        {/* Risk Bar */}
+                        <div className="mt-6">
+                            <div className="flex justify-between text-xs text-zinc-500 mb-2">
+                                <span>Drawdown Limit</span>
+                                <span>2% Used</span>
                             </div>
-                            <div className="text-2xl font-bold text-white">{stats.daily_trades} / {stats.max_trades}</div>
-                            <div className="w-full bg-border h-1 mt-2 rounded-full overflow-hidden">
-                                <div className="bg-blue-500 w-[10%] h-full" />
+                            <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
+                                <div className="h-full bg-green-500 w-[2%] shadow-[0_0_10px_#22c55e]" />
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Logs Console */}
-                <div className="card h-[calc(100vh-140px)] flex flex-col">
-                    <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border">
-                        <Terminal size={16} className="text-secondary" />
-                        <h3 className="font-semibold text-white">System Logs</h3>
+                {/* Right Col: Logs */}
+                <div className="col-span-4 rounded-xl border border-zinc-800 bg-black flex flex-col">
+                    <div className="p-4 border-b border-zinc-800 flex items-center gap-2 text-zinc-400 text-sm">
+                        <Terminal size={16} /> SYSTEM LOGS
                     </div>
-                    <div className="flex-1 overflow-y-auto font-mono text-xs space-y-2 text-text-muted pr-2">
+                    <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-xs">
                         {logs.map((log, i) => (
-                            <div key={i} className="border-l-2 border-border pl-2 hover:bg-white/5 p-1 rounded">
-                                <span className="text-blue-500 opacity-50">[{new Date().toLocaleTimeString()}]</span> {log}
+                            <div key={i} className="flex gap-2">
+                                <span className="text-zinc-600">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                                <span className={cn(
+                                    log.level === 'ERROR' ? 'text-red-500' :
+                                        log.level === 'WARN' ? 'text-yellow-500' : 'text-zinc-300'
+                                )}>
+                                    {log.message}
+                                </span>
                             </div>
                         ))}
-                        <div ref={logsEndRef} />
                     </div>
                 </div>
+
             </div>
         </div>
     );
-}
+};
+
+export default Dashboard;
