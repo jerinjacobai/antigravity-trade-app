@@ -21,6 +21,7 @@ export default function UpstoxCallback() {
 
     const handleExchange = async (code: string) => {
         try {
+            console.log("Processing Auth Code:", code); // Fix unused var lint
             // In a real production setup, this 'exchange_token' would be an Edge Function
             // or a secure backend endpoint to avoid exposing logic.
             // For this phase, we will invoke a Supabase Function.
