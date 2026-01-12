@@ -19,7 +19,8 @@ interface Tick {
 
 const Dashboard = () => {
     const [logs, setLogs] = useState<Log[]>([]);
-    const [price, setPrice] = useState<number>(21500.00);
+    const [niftyPrice, setNiftyPrice] = useState<number>(21500.00);
+    const [sensexPrice, setSensexPrice] = useState<number>(71500.00);
     const [risk, setRisk] = useState({ pnl: 0, trades: 0, max_trades: 25 });
     const [activeAlgo, setActiveAlgo] = useState<string | null>(null);
 
@@ -43,7 +44,9 @@ const Dashboard = () => {
             .on('broadcast', { event: 'market_tick' }, (payload) => {
                 const tick = payload.payload as Tick;
                 if (tick.symbol.includes('Nifty')) {
-                    setPrice(tick.price);
+                    setNiftyPrice(tick.price);
+                } else if (tick.symbol.includes('SENSEX')) {
+                    setSensexPrice(tick.price);
                 }
             })
             // Listen for Orders/Risk Updates (Optional, can poll or subscribe to table)
@@ -61,16 +64,16 @@ const Dashboard = () => {
     };
 
     return (
-        <div className="min-h-screen bg-black text-zinc-100 p-6 font-mono selection:bg-blue-500/30">
+        <div className="h-full font-mono text-zinc-100">
             {/* Header */}
-            <header className="flex justify-between items-center mb-8 border-b border-zinc-800 pb-4">
+            <header className="flex justify-between items-center mb-6 border-b border-zinc-900 pb-4">
                 <div className="flex items-center gap-3">
                     <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_#22c55e]" />
-                    <h1 className="text-xl font-bold tracking-tight">ANTIGRAVITY <span className="text-zinc-500">TERMINAL</span></h1>
+                    <h1 className="text-xl font-bold tracking-tight">LIVE TERMINAL</h1>
                 </div>
                 <div className="flex items-center gap-4">
-                    <div className="px-3 py-1 rounded bg-zinc-900 border border-zinc-800 text-xs">
-                        Strategy: <span className="text-blue-400 font-bold">{activeAlgo || 'LOADING...'}</span>
+                    <div className="px-3 py-1 rounded bg-zinc-900 border border-zinc-800 text-xs text-zinc-400">
+                        Algo: <span className="text-blue-400 font-bold">{activeAlgo || 'NONE'}</span>
                     </div>
                     <button
                         onClick={handleStart}
@@ -82,20 +85,36 @@ const Dashboard = () => {
             </header>
 
             {/* Grid Layout */}
-            <div className="grid grid-cols-12 gap-6 h-[calc(100vh-140px)]">
+            <div className="grid grid-cols-12 gap-6 pb-6">
 
                 {/* Left Col: Market & Risk */}
                 <div className="col-span-8 flex flex-col gap-6">
-                    {/* Market Ticker */}
-                    <div className="h-1/2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 flex flex-col items-center justify-center relative overflow-hidden">
-                        <div className="absolute top-4 left-4 flex items-center gap-2 text-zinc-400 text-sm">
-                            <LineChart size={16} /> LIVE MARKET
+                    {/* Market Tickers */}
+                    <div className="grid grid-cols-2 gap-4">
+                        {/* NIFTY */}
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 flex flex-col items-center justify-center relative overflow-hidden group">
+                            <div className="absolute top-4 left-4 flex items-center gap-2 text-zinc-500 text-xs font-bold tracking-wider">
+                                <LineChart size={14} /> NSE INDEX
+                            </div>
+                            <div className="text-4xl lg:text-5xl font-black tracking-tighter text-white group-hover:scale-105 transition-transform duration-500">
+                                {niftyPrice.toFixed(2)}
+                            </div>
+                            <div className="text-green-500 mt-2 font-medium flex items-center gap-2">
+                                NIFTY 50 <span className="text-xs bg-green-500/10 px-2 py-0.5 rounded">+0.45%</span>
+                            </div>
                         </div>
-                        <div className="text-8xl font-black tracking-tighter bg-gradient-to-b from-white to-zinc-600 bg-clip-text text-transparent">
-                            {price.toFixed(2)}
-                        </div>
-                        <div className="text-green-500 mt-2 font-medium flex items-center gap-2">
-                            NIFTY 50 <span className="text-xs bg-green-500/10 px-2 py-0.5 rounded">+0.45%</span>
+
+                        {/* SENSEX */}
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 flex flex-col items-center justify-center relative overflow-hidden group">
+                            <div className="absolute top-4 left-4 flex items-center gap-2 text-zinc-500 text-xs font-bold tracking-wider">
+                                <LineChart size={14} /> BSE INDEX
+                            </div>
+                            <div className="text-4xl lg:text-5xl font-black tracking-tighter text-white group-hover:scale-105 transition-transform duration-500">
+                                {sensexPrice.toFixed(2)}
+                            </div>
+                            <div className="text-green-500 mt-2 font-medium flex items-center gap-2">
+                                SENSEX <span className="text-xs bg-green-500/10 px-2 py-0.5 rounded">+0.21%</span>
+                            </div>
                         </div>
                     </div>
 

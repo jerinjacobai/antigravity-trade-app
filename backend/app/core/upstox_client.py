@@ -10,12 +10,28 @@ logger = get_logger("upstox_client")
 
 class UpstoxClient:
     def __init__(self):
-        self.api_key = os.getenv("UPSTOX_API_KEY")
+        self.api_key = None
+        self.api_secret = None
         self.access_token = None
         self.configuration = upstox_client.Configuration()
         self.api_instance = None
-        self.user_api_instance = None
         
+    def _fetch_credentials(self):
+        """Fetch API Key/Secret from Supabase user_credentials."""
+        try:
+             # For V1, we just pick the first user found or use a hardcoded ID if multi-tenant
+             # In a real worker, we might loop through all active users.
+             # Here we assume single-user deployment for simplicity.
+             response = supabase.table("user_credentials").select("*").limit(1).execute()
+             if response.data:
+                 creds = response.data[0]
+                 self.api_key = creds.get("upstox_api_key")
+                 self.api_secret = creds.get("upstox_api_secret")
+                 return True
+        except Exception as e:
+            logger.error(f"DB Creds Fetch Error: {e}")
+        return False
+
     def _fetch_token_from_db(self):
         """Fetch the latest access token from Supabase daily_state."""
         try:
@@ -27,10 +43,17 @@ class UpstoxClient:
         return None
 
     def initialize_session(self):
-        """Initialize the Upstox API session using the DB token."""
+        """Initialize the Upstox API session using DB creds and token."""
+        # 1. Get Credentials
+        if not self.api_key:
+            if not self._fetch_credentials():
+                 logger.error("No API Credentials found in DB.")
+                 return False
+
+        # 2. Get Token
         token = self._fetch_token_from_db()
         if not token:
-            logger.warning("No Upstox Token found in DB. Trading functionality will be disabled.")
+            logger.warning("No Upstox Token found in DB. Trading functionality disabled.")
             return False
 
         self.access_token = token
@@ -38,7 +61,6 @@ class UpstoxClient:
         
         # Initialize API instances
         self.api_instance = upstox_client.OrderApi(upstox_client.ApiClient(self.configuration))
-        self.user_api_instance = upstox_client.UserApi(upstox_client.ApiClient(self.configuration))
         self.market_quote_api = upstox_client.MarketQuoteApi(upstox_client.ApiClient(self.configuration))
         
         logger.info("✅ Upstox Session Initialized Successfully")
