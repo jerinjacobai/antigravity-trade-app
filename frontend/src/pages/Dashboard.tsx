@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { getSystemStatus, startSimulation } from '../services/api';
 import { cn } from '../lib/utils';
-import { LineChart, Activity, ShieldAlert, Terminal, Play } from 'lucide-react';
+import { LineChart, ShieldAlert, Terminal, Play } from 'lucide-react';
 
 // Types
 interface Log {
