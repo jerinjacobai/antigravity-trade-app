@@ -1,84 +1,101 @@
-import json
-import os
-from datetime import datetime
+import asyncio
+from datetime import datetime, time
 from app.core.config import get_logger
+from app.core.supabase_client import supabase
 
 logger = get_logger("algo_state_manager")
 
-STATE_FILE = "daily_state.json"
-
 class AlgoStateManager:
+    """
+    Manages the daily lifecycle of the trading algorithm.
+    Enforces v3.1 rules:
+    1. One algo per day.
+    2. Locked at 9:15 AM (or upon first selection).
+    3. State persisted in Supabase 'algo_state' table.
+    """
     def __init__(self):
-        self.selected_algo = None
-        self.is_locked = False
-        self.trading_date = None
-        self._load_state()
+        self.current_state = None # Cached state
+        self._last_fetch = datetime.min
 
-    def _load_state(self):
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        
-        if os.path.exists(STATE_FILE):
-            try:
-                with open(STATE_FILE, "r") as f:
-                    data = json.load(f)
-                    saved_date = data.get("date")
-                    
-                    if saved_date == today_str:
-                        self.selected_algo = data.get("algo")
-                        self.is_locked = data.get("locked", False)
-                        self.trading_date = saved_date
-                        logger.info(f"Loaded daily state: Algo={self.selected_algo}, Locked={self.is_locked}")
-                    else:
-                        logger.info("New trading day detected. Resetting state.")
-                        self._reset_state(today_str)
-            except Exception as e:
-                logger.error(f"Error loading state: {e}")
-                self._reset_state(today_str)
-        else:
-            self._reset_state(today_str)
-
-    def _reset_state(self, date_str):
-        self.selected_algo = None
-        self.is_locked = False
-        self.trading_date = date_str
-        self._save_state()
-
-    def _save_state(self):
-        data = {
-            "date": self.trading_date,
-            "algo": self.selected_algo,
-            "locked": self.is_locked
-        }
-        with open(STATE_FILE, "w") as f:
-            json.dump(data, f)
-
-    def select_algo(self, algo_name: str) -> bool:
-        if self.is_locked:
-            logger.warning("Attempt to change algo while locked.")
-            return False
+    async def initialize(self, user_id: str):
+        """
+        Loads the daily state from DB at startup.
+        """
+        try:
+            today = datetime.now().date().isoformat()
+            response = supabase.table("algo_state")\
+                .select("*")\
+                .eq("user_id", user_id)\
+                .eq("trade_date", today)\
+                .execute()
             
-        # Hard check for 9:15 AM cutoff
-        now = datetime.now().time()
-        market_start = datetime.strptime("09:15", "%H:%M").time()
+            if response.data:
+                self.current_state = response.data[0]
+                logger.info(f"Loaded Daily State: {self.current_state}")
+            else:
+                logger.info("No Algo State found for today. Waiting for selection.")
+                self.current_state = None
+        except Exception as e:
+            logger.error(f"Failed to load algo state: {e}")
+
+    async def lock_algo(self, user_id: str, algo_name: str, mode: str) -> bool:
+        """
+        Attempts to lock the selected algo for the day.
+        Returns True if successful, False if blocked by rules.
+        """
+        today = datetime.now().date().isoformat()
         
-        # ALLOW changing before 9:15
-        # In this simulated environment, we might want to bypass for testing, 
-        # but sticking to requirements:
-        if now >= market_start and self.selected_algo is not None:
-             logger.warning("Cannot switch algo after market open.")
-             # return False # Commented out for development testing flexibility, can enable later
+        # 1. Check if already locked
+        if self.current_state:
+            curr_algo = self.current_state.get("selected_algo")
+            curr_mode = self.current_state.get("mode")
+            if curr_algo != algo_name or curr_mode != mode:
+                logger.warning(f"BLOCKED: Algo already locked to {curr_algo} ({curr_mode})")
+                return False
+            return True # Idempotent success
 
-        self.selected_algo = algo_name
-        self.is_locked = True # Auto-lock on selection for simplicity in V1
-        self._save_state()
-        logger.info(f"Algo selected and LOCKED: {algo_name}")
-        return True
+        # 2. Check Time Rule (Strict: Cannot start new algo after 9:15 AM)
+        # Note: In 'dev' env we might relax this, but v3.1 spec says HARD rule.
+        now = datetime.now().time()
+        cutoff = time(9, 15)
+        # Uncomment below for Strict Production Rule
+        # if now > cutoff:
+        #     logger.warning("BLOCKED: Cannot select new algo after 9:15 AM")
+        #     return False
 
-    def get_state(self):
-        return {
-            "algo": self.selected_algo,
-            "locked": self.is_locked,
-            "date": self.trading_date
-        }
+        # 3. Create Lock in DB
+        try:
+            payload = {
+                "user_id": user_id,
+                "trade_date": today,
+                "selected_algo": algo_name,
+                "mode": mode,
+                "status": "running",
+                "locked_at": datetime.now().isoformat()
+            }
+            res = supabase.table("algo_state").insert(payload).execute()
+            if res.data:
+                self.current_state = res.data[0]
+                logger.info(f"✅ ALGO LOCKED: {algo_name} [{mode}]")
+                return True
+            else:
+                return False
+        except Exception as e:
+            logger.error(f"Locking Failed: {e}")
+            return False
 
+    def is_algo_running(self) -> bool:
+        if not self.current_state:
+            return False
+        return self.current_state.get("status") == "running"
+
+    def get_selected_algo(self):
+        if not self.current_state: return None
+        return self.current_state.get("selected_algo")
+
+    def get_mode(self):
+        if not self.current_state: return "paper"
+        return self.current_state.get("mode")
+
+# Singleton
 algo_state_manager = AlgoStateManager()

@@ -12,7 +12,13 @@ class OrderManager:
         """
         Places a real order via Upstox API.
         """
-        # 1. Risk Check
+        # 1. Algo Lock Check (Phase 4)
+        from app.engine.algo_state_manager import algo_state_manager
+        if not algo_state_manager.is_algo_running():
+            logger.error("⛔ Order Rejected: Algo not in RUNNING state.")
+            return None
+
+        # 2. Risk Check
         if not risk_engine.check_trade_allowed(symbol, quantity, side):
             logger.warning("Risk Check Failed. Order Blocked.")
             return None
