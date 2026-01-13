@@ -194,7 +194,7 @@ const Dashboard = () => {
                                 <div className="p-4 rounded-lg bg-black border border-zinc-800">
                                     <div className="text-zinc-500 text-xs uppercase mb-1">Daily PnL</div>
                                     <div className={cn("text-2xl font-bold", risk.pnl >= 0 ? "text-green-400" : "text-red-400")}>
-                                        ₹{risk.pnl.toFixed(2)}
+                                        ₹{(risk.pnl || 0).toFixed(2)}
                                     </div>
                                 </div>
                                 <div className="p-4 rounded-lg bg-black border border-zinc-800">
@@ -211,21 +211,21 @@ const Dashboard = () => {
                             {/* Visual Risk Bar */}
                             <div className="mt-6">
                                 <div className="flex justify-between text-xs text-zinc-500 mb-2">
-                                    <span>Max Drawdown Limit ({((risk.pnl / -2000) * 100).toFixed(0)}% Used)</span>
+                                    <span>Max Drawdown Limit ({((Math.abs(risk.pnl || 0) / 2000) * 100).toFixed(0)}% Used)</span>
                                     <span>Target: ₹2000 Loss</span>
                                 </div>
                                 <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
                                     {/* Simple calculation: If PnL is negative, show red bar based on max loss (e.g. 2000) */}
                                     {/* If PnL positive, show green bar (Profit target e.g. 5000) */}
-                                    {risk.pnl < 0 ? (
+                                    {(risk.pnl || 0) < 0 ? (
                                         <div
                                             className="h-full bg-red-500 shadow-[0_0_10px_#ef4444]"
-                                            style={{ width: `${Math.min(Math.abs(risk.pnl) / 2000 * 100, 100)}%` }}
+                                            style={{ width: `${Math.min(Math.abs(risk.pnl || 0) / 2000 * 100, 100)}%` }}
                                         />
                                     ) : (
                                         <div
                                             className="h-full bg-green-500 shadow-[0_0_10px_#22c55e]"
-                                            style={{ width: `${Math.min(Math.abs(risk.pnl) / 5000 * 100, 100)}%` }}
+                                            style={{ width: `${Math.min(Math.abs(risk.pnl || 0) / 5000 * 100, 100)}%` }}
                                         />
                                     )}
                                 </div>
