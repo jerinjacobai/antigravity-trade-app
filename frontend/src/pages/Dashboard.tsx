@@ -17,6 +17,7 @@ interface Tick {
     symbol: string;
     price: number;
     timestamp: number;
+    source?: 'PUBLIC' | 'BROKER';
 }
 
 const Dashboard = () => {
@@ -26,6 +27,7 @@ const Dashboard = () => {
     const [risk, setRisk] = useState({ pnl: 0, trades: 0, max_trades: 25 });
     const [activeAlgo, setActiveAlgo] = useState<string | null>(null);
     const [mode, setMode] = useState<'LIVE' | 'PAPER'>('PAPER'); // Default to Paper for safety
+    const [dataSource, setDataSource] = useState<'PUBLIC' | 'BROKER'>('PUBLIC');
 
     useEffect(() => {
         // 1. Initial Fetch
@@ -47,6 +49,8 @@ const Dashboard = () => {
             // Listen for Mock/Real Ticks (Broadcast)
             .on('broadcast', { event: 'market_tick' }, (payload) => {
                 const tick = payload.payload as Tick;
+                if (tick.source) setDataSource(tick.source); // Update Source Indicator
+
                 if (tick.symbol === 'NSE_INDEX|Nifty 50') {
                     setNiftyPrice(tick.price);
                 } else if (tick.symbol === 'BSE_INDEX|SENSEX') {
@@ -78,6 +82,16 @@ const Dashboard = () => {
                     <h1 className="text-xl font-bold tracking-tight">QUANTMIND <span className="text-zinc-500">TERMINAL</span></h1>
                 </div>
                 <div className="flex items-center gap-4 w-full md:w-auto">
+                    {/* Data Source Badge */}
+                    <div className={cn("px-3 py-1 rounded text-xs font-bold border flex items-center gap-2",
+                        dataSource === 'BROKER' ? "bg-green-900/20 border-green-900 text-green-500" : "bg-yellow-900/20 border-yellow-900 text-yellow-500")}>
+                        {dataSource === 'BROKER' ? (
+                            <><span>●</span> DATA: BROKER (LIVE)</>
+                        ) : (
+                            <><span>○</span> DATA: PUBLIC (DELAYED)</>
+                        )}
+                    </div>
+
                     {/* Mode Toggle Display (Read Only for V1) */}
                     <div className={cn("px-3 py-1 rounded text-xs font-bold border", mode === 'LIVE' ? "bg-red-900/20 border-red-900 text-red-500" : "bg-blue-900/20 border-blue-900 text-blue-400")}>
                         {mode} MODE
