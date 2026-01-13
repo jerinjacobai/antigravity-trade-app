@@ -49,10 +49,13 @@ export const selectAlgo = async (algoName: string) => {
     return { status: "success" };
 };
 
-await supabase
-    .from('daily_state')
-    .update({ is_running: true })
-    .eq('date', today);
+export const startSimulation = async () => {
+    // Send command via DB
+    const today = new Date().toISOString().split('T')[0];
+    await supabase
+        .from('daily_state')
+        .update({ is_running: true })
+        .eq('date', today);
 };
 
 export const emergencyStop = async () => {
