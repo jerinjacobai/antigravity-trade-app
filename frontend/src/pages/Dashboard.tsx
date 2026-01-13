@@ -6,6 +6,7 @@ import { LineChart, ShieldAlert, Terminal, Play, Activity } from 'lucide-react';
 import PaperWalletCard from '../components/PaperWalletCard';
 import ManualTradePanel from '../components/ManualTradePanel';
 import PaperAnalytics from '../components/PaperAnalytics';
+import AlgoHealthPanel from '../components/AlgoHealthPanel';
 
 // Types
 interface Log {
@@ -109,6 +110,11 @@ const Dashboard = () => {
                     </button>
                 </div>
             </header>
+
+            {/* Algo Health Panel (Full Width) */}
+            <div className="mb-6">
+                <AlgoHealthPanel />
+            </div>
 
             {/* Grid Layout */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 pb-6">

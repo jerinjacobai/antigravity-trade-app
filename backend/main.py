@@ -57,6 +57,10 @@ async def main():
             # 3. Virtual Engine Housekeeping (Paper Orders)
             if algo_state_manager.get_mode() == "paper":
                 await virtual_execution_engine.sync_pending_orders()
+            elif algo_state_manager.get_mode() == "live":
+                # 4. Live Reconciliation (Audit Logs)
+                from app.engine.order_manager import order_manager
+                await order_manager.sync_orders()
             
             await asyncio.sleep(1)
             

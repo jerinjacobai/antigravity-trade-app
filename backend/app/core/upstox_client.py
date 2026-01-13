@@ -83,5 +83,14 @@ class UpstoxClient:
             logger.error(f"Upstox Quote Error: {e}")
             return None
 
+    def fetch_order_book(self):
+        """Fetch today's order book from Upstox."""
+        if not self.api_instance: return None
+        try:
+            return self.api_instance.get_order_book("2.0")
+        except ApiException as e:
+            logger.error(f"Upstox OrderBook Error: {e}")
+            return None
+
 # Singleton Instance
 upstox_app = UpstoxClient()

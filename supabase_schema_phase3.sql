@@ -1,69 +1,58 @@
--- PHASE 3 MIGRATION: User Profiles & Trading Limits
--- Run this in Supabase SQL Editor
+-- PHASE 5: Audit Logs (Live Trading)
 
-create table if not exists public.user_profiles (
-  user_id uuid references auth.users not null primary key,
+-- Unified Order Book (Live)
+-- Tracks orders sent to the broker.
+create table if not exists public.trade_orders (
+  order_id text not null primary key, -- Use Broker Order ID if available, else UUID
+  user_id uuid references auth.users not null,
   
-  -- Upstox Auth (Tokens should be handled with care)
-  upstox_access_token text,
-  upstox_refresh_token text,
-  token_expiry timestamptz,
+  -- Instrument
+  symbol text not null,
+  transaction_type text not null, -- BUY / SELL
   
-  -- Trading Preferences
-  is_paper_trading boolean default true,
-  trading_enabled boolean default false,
-  kill_switch_active boolean default false,
+  -- Details
+  quantity integer not null,
+  order_type text not null, -- MARKET, LIMIT
+  price numeric, -- Limit Price
+  trigger_price numeric,
   
-  -- Risk Limits
-  max_loss_limit numeric default 1000.0,
-  max_trades_limit integer default 3,
+  -- State
+  status text not null, -- PENDING, OPEN, FILLED, REJECTED, CANCELLED
+  filled_quantity integer default 0,
+  average_price numeric default 0.0,
   
+  -- Metadata
+  algo_name text,
+  broker_order_id text, -- Upstox Order ID
+  reason text, -- "Entry Signal", "Stop Loss", "Target"
+  
+  created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
 
--- Enable RLS
-alter table public.user_profiles enable row level security;
-
--- Policies
-create policy "Users can view own profile" 
-on public.user_profiles for select 
-using (auth.uid() = user_id);
-
-create policy "Users can update own profile" 
-on public.user_profiles for update
-using (auth.uid() = user_id);
-
-create policy "Users can insert own profile" 
-on public.user_profiles for insert 
-with check (auth.uid() = user_id);
-
--- Trigger to create profile on signup (Optional but recommended)
-create or replace function public.handle_new_user() 
-returns trigger as $$
-begin
-  insert into public.user_profiles (user_id)
-  values (new.id);
-  return new;
-end;
-$$ language plpgsql security definer;
-
--- Trigger execution
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute procedure public.handle_new_user();
-
--- PHASE 5: System Resilience
-create table if not exists public.system_events (
-  event_id uuid default gen_random_uuid() primary key,
-  event_type text not null, -- STARTUP, SHUTDOWN, CRASH, HEARTBEAT
-  component text not null, -- WORKER, API, CLIENT
-  severity text not null, -- INFO, WARN, CRITICAL
-  message text,
-  metadata jsonb,
-  created_at timestamptz default now()
+-- Executions (Fills)
+-- Tracks individual fills (partial or full) for reconciliation.
+create table if not exists public.trade_executions (
+  execution_id uuid default gen_random_uuid() primary key,
+  order_id text references public.trade_orders(order_id),
+  user_id uuid references auth.users not null,
+  
+  symbol text not null,
+  quantity integer not null,
+  price numeric not null,
+  side text not null, -- BUY / SELL
+  
+  executed_at timestamptz default now(),
+  broker_trade_id text -- Upstox Trade ID
 );
--- Allow public insert for V1 resilience logging (simplification)
-alter table public.system_events enable row level security;
-create policy "Allow inserts to system_events" on public.system_events for insert with check (true);
-create policy "Allow read system_events" on public.system_events for select using (true);
+
+-- RLS
+alter table public.trade_orders enable row level security;
+alter table public.trade_executions enable row level security;
+
+create policy "Users can view own orders" on public.trade_orders for select using (auth.uid() = user_id);
+create policy "Users can view own executions" on public.trade_executions for select using (auth.uid() = user_id);
+
+-- Note: In a real system, only the worker (service role) should insert/update these. 
+-- For V1 demo with user-driven keys, we might allow user insert if using client-side execution (not recommended)
+-- We assume backend worker uses SERVICE_ROLE_KEY.

@@ -23,21 +23,22 @@ class OrderManager:
             logger.warning("Risk Check Failed. Order Blocked.")
             return None
 
-        # 3. Route based on Mode (PAPER vs LIVE)
+        # 3. Get Context
+        curr_state = algo_state_manager.current_state
+        user_id = curr_state.get("user_id") if curr_state else None
+        
+        if not user_id:
+             logger.error("⛔ Order Rejected: Missing User Context in Algo State.")
+             return None
+        
+        algo_name = algo_state_manager.get_selected_algo()
         mode = algo_state_manager.get_mode()
         
+        # 4. Route based on Mode (PAPER vs LIVE)
         if mode == "paper":
             logger.info(f"📝 Routing to Virtual Engine (Paper Mode): {symbol} {side} {quantity}")
             from app.engine.virtual_engine import virtual_execution_engine
             
-            # TODO: Pass user_id properly (Hardcoded for v1 singleton fallback)
-            # In production, order_manager should accept user_id context
-            user_id = algo_state_manager.current_state.get("user_id") if algo_state_manager.current_state else None
-            
-            if not user_id:
-                logger.error("Cannot place paper order: User ID missing in Algo State")
-                return None
-
             request = {
                 "user_id": user_id,
                 "symbol": symbol,
@@ -45,7 +46,7 @@ class OrderManager:
                 "transaction_type": side.upper(),
                 "order_type": order_type,
                 "price": price,
-                "algo_name": algo_state_manager.get_selected_algo()
+                "algo_name": algo_name
             }
             
             result = await virtual_execution_engine.place_order(request)
@@ -55,7 +56,7 @@ class OrderManager:
                 logger.error(f"Paper Order Failed: {result.get('message')}")
                 return None
 
-        # 4. LIVE Execution via API
+        # 5. LIVE Execution via API
         try:
             # Convert internal 'BUY'/'SELL' to Upstox 'TRANSACTION_TYPE_BUY' etc.
             transaction_type = 'BUY' if side.upper() == 'BUY' else 'SELL'
@@ -76,10 +77,10 @@ class OrderManager:
             })
             
             upstox_order_id = order_details.data.order_id
-            logger.info(f"✅ Order Placed: {upstox_order_id}")
+            logger.info(f"✅ Live Order Placed: {upstox_order_id}")
             
-            # 3. Log to Supabase
-            self._log_order_to_db(upstox_order_id, symbol, quantity, side, "OPEN")
+            # 6. Log to Supabase (Audit Trail)
+            self._log_live_order(upstox_order_id, user_id, symbol, quantity, side, order_type, price, algo_name)
             
             return upstox_order_id
 
@@ -87,19 +88,90 @@ class OrderManager:
             logger.error(f"Order Placement Failed: {e}")
             return None
 
-    def _log_order_to_db(self, order_id, symbol, qty, side, status):
+    def _log_live_order(self, order_id, user_id, symbol, qty, side, order_type, price, algo_name):
+        """
+        Persist Live Order to 'trade_orders' table.
+        """
          if not supabase: return
          try:
-             supabase.table("orders").insert({
+             payload = {
                  "order_id": order_id,
+                 "user_id": user_id,
                  "symbol": symbol,
+                 "transaction_type": side.upper(),
                  "quantity": qty,
-                 "side": side,
-                 "status": status,
-                 "timestamp": "now()"
-             }).execute()
+                 "order_type": order_type,
+                 "price": price,
+                 "status": "OPEN", # Assumption, real status via socket
+                 "algo_name": algo_name,
+                 "created_at": "now()"
+             }
+             supabase.table("trade_orders").insert(payload).execute()
          except Exception as e:
-             logger.error(f"Failed to log order: {e}")
+             logger.error(f"Failed to log live trade order: {e}")
+
+    async def sync_orders(self):
+        """
+        Reconciliation Loop:
+        1. Fetch Order Book from Broker.
+        2. Update 'trade_orders' in DB.
+        3. Insert 'trade_executions' for fills.
+        """
+        if not upstox_app.api_instance: return # Not connected
+
+        ob_response = upstox_app.fetch_order_book()
+        if not ob_response or not ob_response.data: return
+
+        for order in ob_response.data:
+            try:
+                # Map Upstox Status to Our Status
+                # Upstox: complete, rejected, cancelled, open
+                # Ours: FILLED, REJECTED, CANCELLED, OPEN, PENDING
+                status_map = {
+                    "complete": "FILLED",
+                    "rejected": "REJECTED", 
+                    "cancelled": "CANCELLED",
+                    "open": "OPEN",
+                    "trigger_pending": "PENDING"
+                }
+                
+                remote_status = status_map.get(order.status, order.status.upper())
+                
+                # Update DB
+                supabase.table("trade_orders").update({
+                    "status": remote_status,
+                    "filled_quantity": order.filled_quantity,
+                    "average_price": order.average_price,
+                    "reason": order.status_message, # Capture rejection reason
+                    "updated_at": "now()"
+                }).eq("order_id", order.order_id).execute()
+
+                # If Filled, ensure execution record exists
+                if remote_status == "FILLED":
+                    # Check if execution exists (Simple Dedupe by order_id for V1)
+                    # In V2, handle partial fills with unique trade_ids
+                    exists = supabase.table("trade_executions").select("execution_id").eq("order_id", order.order_id).execute()
+                    if not exists.data:
+                        # Insert Execution
+                        # We need user_id, fetch from order table if needed or just assume context?
+                        # Better to fetch from trade_orders to match
+                        local_order = supabase.table("trade_orders").select("user_id").eq("order_id", order.order_id).single().execute()
+                        if local_order.data:
+                            uid = local_order.data['user_id']
+                            supabase.table("trade_executions").insert({
+                                "order_id": order.order_id,
+                                "user_id": uid,
+                                "symbol": order.instrument_token, # or trading_symbol
+                                "quantity": order.filled_quantity,
+                                "price": order.average_price,
+                                "side": order.transaction_type,
+                                "broker_trade_id": order.exchange_order_id, # Approx
+                                "executed_at": order.order_timestamp
+                            }).execute()
+                            logger.info(f"💰 Trade Executed: {order.order_id} @ {order.average_price}")
+
+            except Exception as e:
+                logger.error(f"Sync Order Error ({order.order_id}): {e}")
 
 # Singleton
 order_manager = OrderManager()
