@@ -22,7 +22,7 @@ def strategy_tick_listener(data):
         asyncio.create_task(strategy.on_tick(data))
 
 async def main():
-    logger.info("🚀 QuantMind Algo Worker Starting...")
+    logger.info("QuantMind Algo Worker Starting...")
     
     if not supabase:
         logger.critical("Supabase connection failed. Exiting.")

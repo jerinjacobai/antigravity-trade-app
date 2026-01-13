@@ -39,11 +39,11 @@ class BrokerDataAdapter(MarketDataAdapter):
     async def start(self):
         # Ensure Session
         if not upstox_app.access_token:
-            logger.error("🚫 Broker Adapter: No Access Token")
+            logger.error("Broker Adapter: No Access Token")
             return
 
         self.running = True
-        logger.info("🔌 Broker Adapter: Connecting to Upstox WebSocket...")
+        logger.info("Broker Adapter: Connecting to Upstox WebSocket...")
         asyncio.create_task(self._websocket_loop())
 
     async def _websocket_loop(self):
@@ -58,7 +58,7 @@ class BrokerDataAdapter(MarketDataAdapter):
                     extra_headers={"Authorization": f"Bearer {upstox_app.access_token}"},
                     ssl=ssl_context
                 ) as websocket:
-                    logger.info("✅ Broker Adapter: Connected")
+                    logger.info("Broker Adapter: Connected")
                     await self._subscribe_instruments(websocket)
 
                     async for message in websocket:
@@ -122,7 +122,7 @@ class PublicDataAdapter(MarketDataAdapter):
     
     async def start(self):
         self.running = True
-        logger.info("🌍 Public Adapter: Starting Mock Feed...")
+        logger.info("Public Adapter: Starting Mock Feed...")
         asyncio.create_task(self._mock_loop())
 
     async def _mock_loop(self):
@@ -176,7 +176,7 @@ class MarketDataService:
             self.active_adapter = self.public_adapter
 
         if self.active_adapter != previous_adapter:
-            logger.info(f"🔄 Market Data Switched: {type(previous_adapter).__name__} -> {type(self.active_adapter).__name__}")
+            logger.info(f"Market Data Switched: {type(previous_adapter).__name__} -> {type(self.active_adapter).__name__}")
             # In a full specific implementation, we might stop the old one and start the new one.
             # For V1, we simply rely on lazy start or ensure both are managed.
             # Let's ensure the active one is running.
