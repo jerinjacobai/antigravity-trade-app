@@ -6,6 +6,7 @@ from app.core.event_manager import event_manager
 from app.engine.algo_state_manager import algo_state_manager
 from app.engine.market_data import market_data_service
 from app.engine.virtual_engine import virtual_execution_engine
+from app.core.health_monitor import health_monitor
 
 # Load Env
 load_dotenv()
@@ -27,6 +28,9 @@ async def main():
         logger.critical("Supabase connection failed. Exiting.")
         return
 
+    # Log Startup
+    event_manager.log_system_event("STARTUP", "WORKER", "INFO", "QuantMind Worker Process Started")
+
     # 1. Initialize Managers
     # For V1, we assume a single user context or iterate users. 
     # For now, we init for the primary admin user (TODO: Multi-tenant loop)
@@ -38,6 +42,9 @@ async def main():
     # Start Market Data Service
     logger.info("Starting Market Data Service...")
     await market_data_service.start()
+    
+    # Start Health Monitor
+    await health_monitor.start()
 
     # Main Loop
     while True:
@@ -55,6 +62,7 @@ async def main():
             
         except Exception as e:
             logger.error(f"Worker Loop Error: {e}")
+            event_manager.log_system_event("CRASH", "WORKER", "CRITICAL", f"Main Loop Exception: {e}")
             await asyncio.sleep(5)
 
 if __name__ == "__main__":
@@ -62,4 +70,5 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Worker Stopping...")
+        event_manager.log_system_event("SHUTDOWN", "WORKER", "INFO", "Worker Stopped via KeyboardInterrupt")
         market_data_service.stop()

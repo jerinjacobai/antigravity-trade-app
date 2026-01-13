@@ -44,4 +44,24 @@ class EventManager:
             # Fallback to local logger to avoid loops
             logger.error(f"Supabase Log Failed: {e}")
 
+    def log_system_event(self, event_type: str, component: str, severity: str, message: str, metadata: dict = None):
+        """
+        Logs critical system lifecycle events to 'system_events' table.
+        """
+        if not supabase: return
+        try:
+            payload = {
+                "event_type": event_type,
+                "component": component,
+                "severity": severity,
+                "message": message,
+                "metadata": metadata,
+                "created_at": datetime.now().isoformat()
+            }
+            # Fire and forget
+            supabase.table("system_events").insert(payload).execute()
+        except Exception as e:
+            logger.error(f"System Event Log Failed: {e}")
+
 event_manager = EventManager()
+

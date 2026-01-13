@@ -52,3 +52,18 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- PHASE 5: System Resilience
+create table if not exists public.system_events (
+  event_id uuid default gen_random_uuid() primary key,
+  event_type text not null, -- STARTUP, SHUTDOWN, CRASH, HEARTBEAT
+  component text not null, -- WORKER, API, CLIENT
+  severity text not null, -- INFO, WARN, CRITICAL
+  message text,
+  metadata jsonb,
+  created_at timestamptz default now()
+);
+-- Allow public insert for V1 resilience logging (simplification)
+alter table public.system_events enable row level security;
+create policy "Allow inserts to system_events" on public.system_events for insert with check (true);
+create policy "Allow read system_events" on public.system_events for select using (true);
