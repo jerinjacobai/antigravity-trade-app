@@ -42,11 +42,17 @@ const Dashboard = () => {
         init();
 
         // 2. Realtime Subscriptions
+        // 2. Realtime Subscriptions
         const channel = supabase.channel('dashboard_realtime')
-            // Listen for Logs
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trade_logs' }, (payload) => {
-                const newLog = payload.new as any;
-                setLogs(prev => [{ timestamp: newLog.timestamp, message: newLog.message, level: newLog.level }, ...prev].slice(0, 50));
+            // Listen for System Events (Logs)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'system_events' }, (payload) => {
+                const event = payload.new as any;
+                const newLog = {
+                    timestamp: event.created_at,
+                    message: `[${event.component}] ${event.message}`,
+                    level: event.severity || 'INFO'
+                };
+                setLogs(prev => [newLog, ...prev].slice(0, 50));
             })
             // Listen for Mock/Real Ticks (Broadcast)
             .on('broadcast', { event: 'market_tick' }, (payload) => {
