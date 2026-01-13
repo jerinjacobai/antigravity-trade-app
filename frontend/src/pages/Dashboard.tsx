@@ -134,8 +134,8 @@ const Dashboard = () => {
                         <div className="flex flex-col gap-4">
                             <PaperWalletCard />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <ManualTradePanel symbol="NIFTY 24500 CE" onOrderPlaced={handlePaperOrder} />
-                                <ManualTradePanel symbol="NIFTY 24500 PE" onOrderPlaced={handlePaperOrder} />
+                                <ManualTradePanel symbol="NIFTY" spotPrice={niftyPrice} onOrderPlaced={handlePaperOrder} />
+                                <ManualTradePanel symbol="SENSEX" spotPrice={sensexPrice} onOrderPlaced={handlePaperOrder} />
                             </div>
                         </div>
                     ) : (
