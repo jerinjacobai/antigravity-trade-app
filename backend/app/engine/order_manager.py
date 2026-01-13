@@ -8,7 +8,7 @@ from app.core.supabase_client import supabase
 logger = get_logger("order_manager")
 
 class OrderManager:
-    def place_order(self, symbol: str, quantity: int, side: str, order_type="MARKET", price=0.0):
+    async def place_order(self, symbol: str, quantity: int, side: str, order_type="MARKET", price=0.0):
         """
         Places a real order via Upstox API.
         """
@@ -23,7 +23,39 @@ class OrderManager:
             logger.warning("Risk Check Failed. Order Blocked.")
             return None
 
-        # 2. Place Order via API
+        # 3. Route based on Mode (PAPER vs LIVE)
+        mode = algo_state_manager.get_mode()
+        
+        if mode == "paper":
+            logger.info(f"📝 Routing to Virtual Engine (Paper Mode): {symbol} {side} {quantity}")
+            from app.engine.virtual_engine import virtual_execution_engine
+            
+            # TODO: Pass user_id properly (Hardcoded for v1 singleton fallback)
+            # In production, order_manager should accept user_id context
+            user_id = algo_state_manager.current_state.get("user_id") if algo_state_manager.current_state else None
+            
+            if not user_id:
+                logger.error("Cannot place paper order: User ID missing in Algo State")
+                return None
+
+            request = {
+                "user_id": user_id,
+                "symbol": symbol,
+                "quantity": quantity,
+                "transaction_type": side.upper(),
+                "order_type": order_type,
+                "price": price,
+                "algo_name": algo_state_manager.get_selected_algo()
+            }
+            
+            result = await virtual_execution_engine.place_order(request)
+            if result.get("status") in ["FILLED", "PENDING"]:
+                return result.get("order_id")
+            else:
+                logger.error(f"Paper Order Failed: {result.get('message')}")
+                return None
+
+        # 4. LIVE Execution via API
         try:
             # Convert internal 'BUY'/'SELL' to Upstox 'TRANSACTION_TYPE_BUY' etc.
             transaction_type = 'BUY' if side.upper() == 'BUY' else 'SELL'
