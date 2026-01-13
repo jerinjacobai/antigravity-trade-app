@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Wallet, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
+import { Wallet, TrendingUp, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface PaperWallet {

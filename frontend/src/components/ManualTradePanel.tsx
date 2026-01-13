@@ -1,15 +1,20 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { ChevronDown } from 'lucide-react';
+import OptionChainPicker from './OptionChainPicker';
 
 interface ManualTradePanelProps {
-    symbol: string;
+    symbol: string; // Deprecated but kept for compatibility, usage acts as "Index Name"
+    spotPrice: number; // New Prop needed for Picker
     onOrderPlaced: () => void;
 }
 
-export default function ManualTradePanel({ symbol, onOrderPlaced }: ManualTradePanelProps) {
+export default function ManualTradePanel({ symbol, spotPrice, onOrderPlaced }: ManualTradePanelProps) {
+    const [selectedSymbol, setSelectedSymbol] = useState<string>(symbol);
     const [quantity, setQuantity] = useState<number>(50);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [showPicker, setShowPicker] = useState(false);
 
     const handleTrade = async (side: 'BUY' | 'SELL') => {
         setLoading(true);
@@ -22,24 +27,9 @@ export default function ManualTradePanel({ symbol, onOrderPlaced }: ManualTradeP
                 return;
             }
 
-            // In V1, we just insert directly into paper_orders to simulate the request.
-            // The Backend Worker (Virtual Engine) should ideally pick this up, OR 
-            // we can call an Edge Function / API endpoint.
-            // For now, let's assume we call a backend endpoint (mocked here as simple DB insert to poll)
-            // But wait, our VirtualEngine is in Python. We need to trigger it.
-            // Let's insert into 'paper_orders' with status 'PENDING' and trust the worker polls it?
-            // Yes, checking VirtualEngine implementation... it doesn't POLL yet, it expects a method call.
-            // We need an API endpoint. 
-            // For this phase, I will simulate the API call by inserting to DB and assuming a hypothetical watcher.
-
-            // ACTUALLY: The correct way for V1 without a full API server is to INSERT to DB 
-            // and have a 'Realtime Subscription' in the Python worker? 
-            // Or just use the Supabase Client in Python to poll 'paper_orders' where status='PENDING'.
-            // I will assume the Python Worker will be updated to poll 'paper_orders' for these manual trades.
-
             const { error: dbError } = await supabase.from('paper_orders').insert({
                 user_id: user.id,
-                symbol: symbol,
+                symbol: selectedSymbol,
                 transaction_type: side,
                 quantity: quantity,
                 order_type: 'MARKET',
@@ -50,7 +40,6 @@ export default function ManualTradePanel({ symbol, onOrderPlaced }: ManualTradeP
             if (dbError) throw dbError;
 
             onOrderPlaced();
-            alert(`Order Placed: ${side} ${quantity} ${symbol}`);
 
         } catch (err: any) {
             setError(err.message);
@@ -63,7 +52,28 @@ export default function ManualTradePanel({ symbol, onOrderPlaced }: ManualTradeP
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
             <div className="flex justify-between items-center mb-4">
                 <h3 className="text-white font-medium">Manual Trade</h3>
-                <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-1 rounded">{symbol}</span>
+                <div className="relative">
+                    <button
+                        onClick={() => setShowPicker(!showPicker)}
+                        className="flex items-center gap-2 text-xs text-indigo-400 bg-indigo-500/10 px-3 py-1.5 rounded-full hover:bg-indigo-500/20 transition-colors"
+                    >
+                        {selectedSymbol} <ChevronDown size={14} />
+                    </button>
+
+                    {/* Picker Dropdown */}
+                    {showPicker && (
+                        <div className="absolute right-0 top-8 z-50 w-64 bg-zinc-950 border border-zinc-800 rounded-xl shadow-xl p-4">
+                            <OptionChainPicker
+                                spotPrice={spotPrice}
+                                index={selectedSymbol.includes('NIFTY') ? 'NIFTY' : 'SENSEX'}
+                                onSelect={(sym) => {
+                                    setSelectedSymbol(sym);
+                                    setShowPicker(false);
+                                }}
+                            />
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="space-y-4">

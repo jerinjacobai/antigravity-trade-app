@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronDown, Check } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Check } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface OptionChainPickerProps {
@@ -9,7 +9,6 @@ interface OptionChainPickerProps {
 }
 
 export default function OptionChainPicker({ spotPrice, index, onSelect }: OptionChainPickerProps) {
-    const [expiry, setExpiry] = useState<string>('Current Week');
     const [selectedStrike, setSelectedStrike] = useState<number | null>(null);
     const [optionType, setOptionType] = useState<'CE' | 'PE'>('CE');
     const [strikes, setStrikes] = useState<number[]>([]);

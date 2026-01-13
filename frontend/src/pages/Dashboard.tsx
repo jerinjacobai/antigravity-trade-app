@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { getSystemStatus, startSimulation } from '../services/api';
 import { cn } from '../lib/utils';
-import { LineChart, ShieldAlert, Terminal, Play, Wallet, Activity } from 'lucide-react';
+import { LineChart, ShieldAlert, Terminal, Play } from 'lucide-react';
 import PaperWalletCard from '../components/PaperWalletCard';
 import ManualTradePanel from '../components/ManualTradePanel';
 
