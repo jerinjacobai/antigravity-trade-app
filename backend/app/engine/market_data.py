@@ -13,7 +13,8 @@ class MarketDataService:
         self.running = False
         self.ws_url = "wss://api.upstox.com/v2/feed/market-data-feed"
         # Using Instrument Keys format: 'NSE_INDEX|Nifty 50'
-        self.subscribed_symbols = ["NSE_INDEX|Nifty 50", "NSE_INDEX|Nifty Bank"]
+        # Correct keys for V2 API: 'NSE_INDEX|Nifty 50' and 'BSE_INDEX|SENSEX'
+        self.subscribed_symbols = ["NSE_INDEX|Nifty 50", "BSE_INDEX|SENSEX"]
     
     async def start(self):
         """Starts the Real WebSocket Feed."""

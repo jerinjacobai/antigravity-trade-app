@@ -43,9 +43,10 @@ const Dashboard = () => {
             // Listen for Mock/Real Ticks (Broadcast)
             .on('broadcast', { event: 'market_tick' }, (payload) => {
                 const tick = payload.payload as Tick;
-                if (tick.symbol.includes('Nifty')) {
+                // Strict matching to prevent "Nifty Bank" from overwriting "Nifty 50"
+                if (tick.symbol === 'NSE_INDEX|Nifty 50') {
                     setNiftyPrice(tick.price);
-                } else if (tick.symbol.includes('SENSEX')) {
+                } else if (tick.symbol === 'BSE_INDEX|SENSEX') {
                     setSensexPrice(tick.price);
                 }
             })
