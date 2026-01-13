@@ -160,7 +160,27 @@ const Dashboard = () => {
                             </div>
                         </div>
                     ) : (
-                        <div className="h-auto md:h-1/2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
+                        <div className="h-auto md:h-1/2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 relative overflow-hidden">
+                            {/* Emergency Overlay */}
+                            <div className="absolute top-4 right-4 z-10">
+                                <button
+                                    onClick={async () => {
+                                        if (window.confirm("⚠️ EMERGENCY KILL SWITCH\n\n- Stop all Algos\n- Cancel all Orders\n- Disable Trading\n\nAre you sure?")) {
+                                            try {
+                                                const { emergencyStop } = await import('../services/api');
+                                                await emergencyStop();
+                                                alert("System Stopped. Trading Disabled.");
+                                            } catch (e) {
+                                                alert("Kill Switch Failed. CONTACT ADMIN.");
+                                            }
+                                        }
+                                    }}
+                                    className="bg-red-900/50 hover:bg-red-600 text-red-200 hover:text-white border border-red-700 px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1.5"
+                                >
+                                    <ShieldAlert size={12} /> KILL SWITCH
+                                </button>
+                            </div>
+
                             <div className="flex items-center gap-2 text-zinc-400 text-sm mb-6">
                                 <ShieldAlert size={16} /> LIVE RISK MONITOR
                             </div>
@@ -182,14 +202,26 @@ const Dashboard = () => {
                                     <div className="text-2xl font-bold text-blue-400">ACTIVE</div>
                                 </div>
                             </div>
-                            {/* Risk Bar */}
+                            {/* Visual Risk Bar */}
                             <div className="mt-6">
                                 <div className="flex justify-between text-xs text-zinc-500 mb-2">
-                                    <span>Drawdown Limit</span>
-                                    <span>2% Used</span>
+                                    <span>Max Drawdown Limit ({((risk.pnl / -2000) * 100).toFixed(0)}% Used)</span>
+                                    <span>Target: ₹2000 Loss</span>
                                 </div>
                                 <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
-                                    <div className="h-full bg-green-500 w-[2%] shadow-[0_0_10px_#22c55e]" />
+                                    {/* Simple calculation: If PnL is negative, show red bar based on max loss (e.g. 2000) */}
+                                    {/* If PnL positive, show green bar (Profit target e.g. 5000) */}
+                                    {risk.pnl < 0 ? (
+                                        <div
+                                            className="h-full bg-red-500 shadow-[0_0_10px_#ef4444]"
+                                            style={{ width: `${Math.min(Math.abs(risk.pnl) / 2000 * 100, 100)}%` }}
+                                        />
+                                    ) : (
+                                        <div
+                                            className="h-full bg-green-500 shadow-[0_0_10px_#22c55e]"
+                                            style={{ width: `${Math.min(Math.abs(risk.pnl) / 5000 * 100, 100)}%` }}
+                                        />
+                                    )}
                                 </div>
                             </div>
                         </div>

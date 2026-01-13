@@ -49,11 +49,31 @@ export const selectAlgo = async (algoName: string) => {
     return { status: "success" };
 };
 
-export const startSimulation = async () => {
-    // Send command via DB
+await supabase
+    .from('daily_state')
+    .update({ is_running: true })
+    .eq('date', today);
+};
+
+export const emergencyStop = async () => {
+    // Phase 5: Kill Switch
     const today = new Date().toISOString().split('T')[0];
-    await supabase
-        .from('daily_state')
-        .update({ is_running: true })
-        .eq('date', today);
+    const { error } = await supabase
+        .from('algo_state') // Updated table name in v3.1
+        .update({
+            status: 'STOPPED',
+            kill_switch_triggered: true
+        })
+        .eq('trade_date', today);
+
+    if (error) {
+        console.error("Kill Switch Failed:", error);
+        throw error;
+    }
+
+    // Also disable user profile trading
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+        await supabase.from('user_profiles').update({ kill_switch_active: true }).eq('user_id', user.id);
+    }
 };
