@@ -163,8 +163,78 @@ class VirtualExecutionEngine:
             return res.data[0]
         return None
 
+    async def sync_pending_orders(self):
+        """
+        Polls for PENDING orders in DB and attempts to execute them.
+        """
+        try:
+            # Fetch PENDING orders
+            res = supabase.table("paper_orders").select("*").eq("status", "PENDING").execute()
+            if not res.data:
+                return
+
+            orders = res.data
+            for order in orders:
+                symbol = order["symbol"]
+                order_type = order["order_type"]
+                
+                # Get current market price
+                ltp = await market_data_service.get_ltp(symbol)
+                if not ltp:
+                    continue # Skip if price not available yet
+
+                # MARKET ORDER: Instant fill
+                if order_type == "MARKET":
+                    await self._execute_fill(order, ltp)
+                
+                # LIMIT ORDER Check
+                elif order_type == "LIMIT":
+                    limit_price = order.get("price")
+                    side = order["transaction_type"]
+                    
+                    # BUY: Fill if LTP <= Limit Price
+                    if side == "BUY" and ltp <= limit_price:
+                        await self._execute_fill(order, limit_price) # Fill at Limit (or better)
+                    
+                    # SELL: Fill if LTP >= Limit Price
+                    elif side == "SELL" and ltp >= limit_price:
+                        await self._execute_fill(order, limit_price)
+
+        except Exception as e:
+            logger.error(f"Sync Pending Orders Error: {e}")
+
     async def _update_wallet(self, user_id: str, qty: int, side: str, price: float):
-        # Update balance / used margin
-        pass
+        """
+        Updates Paper Wallet Balance & Used Margin.
+        """
+        try:
+            wallet = await self._get_wallet(user_id)
+            if not wallet: return
+            
+            # Simple Logic for v1:
+            # Buy = Increase Used Margin, Decrease Balance
+            # Sell = Decrease Used Margin, Increase Balance (Realize PnL logic needed, but simplified here)
+            
+            # NOTE: Real PnL logic requires tracking avg entry price per position.
+            # Here we just adjust Available Balance for now.
+            
+            trade_value = qty * price
+            new_balance = wallet["available_balance"]
+            new_used = wallet["used_margin"]
+            
+            if side == "BUY":
+                new_balance -= trade_value
+                new_used += trade_value
+            else:
+                new_balance += trade_value
+                new_used -= trade_value
+
+            supabase.table("paper_wallet").update({
+                "available_balance": new_balance,
+                "used_margin": new_used
+            }).eq("user_id", user_id).execute()
+            
+        except Exception as e:
+            logger.error(f"Wallet Update Error: {e}")
 
 virtual_execution_engine = VirtualExecutionEngine()

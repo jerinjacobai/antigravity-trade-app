@@ -40,6 +40,11 @@ async def main():
                     # For demo, we just log heartbeat
                      pass
             
+            # 2. Virtual Engine Sync (Paper Orders)
+            from app.engine.virtual_engine import virtual_execution_engine
+            if algo_state_manager.current_state and algo_state_manager.current_state.get("mode") == "paper":
+                await virtual_execution_engine.sync_pending_orders()
+            
             await asyncio.sleep(5)
             
         except Exception as e:
