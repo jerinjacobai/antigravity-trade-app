@@ -67,7 +67,7 @@ export default function PaperWalletCard() {
         </div>
     );
 
-    const totalPortfolio = wallet.available_balance + wallet.used_margin + wallet.unrealized_pnl;
+    const totalPortfolio = (wallet.available_balance || 0) + (wallet.used_margin || 0) + (wallet.unrealized_pnl || 0);
 
     return (
         <div className="bg-gradient-to-br from-indigo-900/20 to-zinc-900 border border-indigo-500/30 rounded-xl p-6 relative overflow-hidden">
@@ -93,25 +93,25 @@ export default function PaperWalletCard() {
                 <div className="bg-black/20 rounded-lg p-3">
                     <div className="text-zinc-500 text-xs mb-1">Available Margin</div>
                     <div className="font-mono font-medium text-white">
-                        ₹{wallet.available_balance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                        ₹{(wallet.available_balance || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </div>
                 </div>
                 <div className="bg-black/20 rounded-lg p-3">
                     <div className="text-zinc-500 text-xs mb-1">Used Margin</div>
                     <div className="font-mono font-medium text-white">
-                        ₹{wallet.used_margin.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                        ₹{(wallet.used_margin || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </div>
                 </div>
                 <div className="bg-black/20 rounded-lg p-3">
                     <div className="text-zinc-500 text-xs mb-1">Realized P&L</div>
-                    <div className={`font-mono font-medium ${wallet.realized_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {wallet.realized_pnl >= 0 ? '+' : ''}{wallet.realized_pnl.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                    <div className={`font-mono font-medium ${(wallet.realized_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {(wallet.realized_pnl || 0) >= 0 ? '+' : ''}{(wallet.realized_pnl || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                     </div>
                 </div>
                 <div className="bg-black/20 rounded-lg p-3">
                     <div className="text-zinc-500 text-xs mb-1">Unrealized P&L</div>
-                    <div className={`font-mono font-medium ${wallet.unrealized_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {wallet.unrealized_pnl >= 0 ? '+' : ''}{wallet.unrealized_pnl.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                    <div className={`font-mono font-medium ${(wallet.unrealized_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {(wallet.unrealized_pnl || 0) >= 0 ? '+' : ''}{(wallet.unrealized_pnl || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                     </div>
                 </div>
             </div>
