@@ -228,9 +228,7 @@ const Dashboard = () => {
                     )}
                 </div>
 
-                import PaperAnalytics from '../components/PaperAnalytics'; // Add import
 
-                // ... in Dashboard ...
 
                 {/* Right Col: Logs or Analytics */}
                 <div className="col-span-1 md:col-span-4 rounded-xl border border-zinc-800 bg-black flex flex-col h-[500px] md:h-auto">
