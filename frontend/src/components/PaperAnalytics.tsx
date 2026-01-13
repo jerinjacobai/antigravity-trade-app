@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { TrendingUp, TrendingDown, Activity, History } from 'lucide-react';
+import { TrendingUp, Activity, History } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface AnalyticsHook {
@@ -62,7 +62,7 @@ export default function PaperAnalytics() {
 
             setStats({
                 totalPnL: wallet?.realized_pnl || 0,
-                winRate: calculateWinRate(wallet?.realized_pnl, 0), // Placeholder logic for V1
+                winRate: calculateWinRate(wallet?.realized_pnl), // Placeholder logic for V1
                 totalTrades: trades?.length || 0, // This is just recent fetch length, need count
                 openPositions: positions?.length || 0,
                 recentTrades: trades || []
@@ -74,7 +74,7 @@ export default function PaperAnalytics() {
         }
     };
 
-    const calculateWinRate = (pnl: number, trades: number) => {
+    const calculateWinRate = (pnl: number) => {
         // TODO: Real implementation needs 'paper_trade_journal' or closed positions
         if (!pnl || pnl === 0) return 0;
         return pnl > 0 ? 100 : 0; // Extremely simplified

@@ -4,6 +4,18 @@ param (
 
 Write-Host "🚀 Starting Dual Push Sequence..." -ForegroundColor Cyan
 
+# 0. Build Check
+Write-Host "0. Verifying Build..."
+Set-Location frontend
+npm run build
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ Build Failed! Aborting push." -ForegroundColor Red
+    Set-Location ..
+    exit 1
+}
+Set-Location ..
+Write-Host "✅ Build Passed" -ForegroundColor Green
+
 # Add all changes
 Write-Host "1. Staging changes..."
 git add .
