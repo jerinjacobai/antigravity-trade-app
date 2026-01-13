@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { getSystemStatus, startSimulation } from '../services/api';
 import { cn } from '../lib/utils';
-import { LineChart, ShieldAlert, Terminal, Play } from 'lucide-react';
+import { LineChart, ShieldAlert, Terminal, Play, Activity } from 'lucide-react';
 import PaperWalletCard from '../components/PaperWalletCard';
 import ManualTradePanel from '../components/ManualTradePanel';
+import PaperAnalytics from '../components/PaperAnalytics';
 
 // Types
 interface Log {
@@ -189,24 +190,41 @@ const Dashboard = () => {
                     )}
                 </div>
 
-                {/* Right Col: Logs */}
+                import PaperAnalytics from '../components/PaperAnalytics'; // Add import
+
+                // ... in Dashboard ...
+
+                {/* Right Col: Logs or Analytics */}
                 <div className="col-span-1 md:col-span-4 rounded-xl border border-zinc-800 bg-black flex flex-col h-[500px] md:h-auto">
-                    <div className="p-4 border-b border-zinc-800 flex items-center gap-2 text-zinc-400 text-sm">
-                        <Terminal size={16} /> SYSTEM LOGS
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-xs">
-                        {logs.map((log, i) => (
-                            <div key={i} className="flex gap-2">
-                                <span className="text-zinc-600">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                                <span className={cn(
-                                    log.level === 'ERROR' ? 'text-red-500' :
-                                        log.level === 'WARN' ? 'text-yellow-500' : 'text-zinc-300'
-                                )}>
-                                    {log.message}
-                                </span>
+                    {mode === 'PAPER' ? (
+                        <>
+                            <div className="p-4 border-b border-zinc-800 flex items-center gap-2 text-zinc-400 text-sm">
+                                <Activity size={16} /> PAPER ANALYTICS
                             </div>
-                        ))}
-                    </div>
+                            <div className="flex-1 overflow-y-auto p-4">
+                                <PaperAnalytics />
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="p-4 border-b border-zinc-800 flex items-center gap-2 text-zinc-400 text-sm">
+                                <Terminal size={16} /> SYSTEM LOGS
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-xs">
+                                {logs.map((log, i) => (
+                                    <div key={i} className="flex gap-2">
+                                        <span className="text-zinc-600">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                                        <span className={cn(
+                                            log.level === 'ERROR' ? 'text-red-500' :
+                                                log.level === 'WARN' ? 'text-yellow-500' : 'text-zinc-300'
+                                        )}>
+                                            {log.message}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    )}
                 </div>
 
             </div>
