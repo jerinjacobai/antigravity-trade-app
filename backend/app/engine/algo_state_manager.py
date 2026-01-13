@@ -16,6 +16,7 @@ class AlgoStateManager:
     def __init__(self):
         self.current_state = None # Cached state
         self._last_fetch = datetime.min
+        self.strategy_instance = None # Active Strategy Object
 
     async def initialize(self, user_id: str):
         """
@@ -52,6 +53,11 @@ class AlgoStateManager:
             if curr_algo != algo_name or curr_mode != mode:
                 logger.warning(f"BLOCKED: Algo already locked to {curr_algo} ({curr_mode})")
                 return False
+            
+            # Ensure instance is loaded if state exists
+            if not self.strategy_instance:
+                self._load_strategy(curr_algo)
+                
             return True # Idempotent success
 
         # 2. Check Time Rule (Strict: Cannot start new algo after 9:15 AM)
@@ -77,12 +83,34 @@ class AlgoStateManager:
             if res.data:
                 self.current_state = res.data[0]
                 logger.info(f"✅ ALGO LOCKED: {algo_name} [{mode}]")
+                
+                # Load and Start Strategy
+                self._load_strategy(algo_name)
                 return True
             else:
                 return False
         except Exception as e:
             logger.error(f"Locking Failed: {e}")
             return False
+
+    def _load_strategy(self, algo_name: str):
+        """
+        Factory method to instantiate strategy classes.
+        """
+        try:
+            if self.strategy_instance:
+                self.strategy_instance.stop()
+            
+            if algo_name == "VPMS":
+                from app.strategies.vpms_strategy import VPMSStrategy
+                self.strategy_instance = VPMSStrategy()
+                self.strategy_instance.start()
+                logger.info(f"Loaded Strategy Instance: {algo_name}")
+            else:
+                logger.warning(f"Unknown Algo Name: {algo_name}")
+                self.strategy_instance = None
+        except Exception as e:
+            logger.error(f"Error loading strategy {algo_name}: {e}")
 
     def is_algo_running(self) -> bool:
         if not self.current_state:
@@ -96,6 +124,9 @@ class AlgoStateManager:
     def get_mode(self):
         if not self.current_state: return "paper"
         return self.current_state.get("mode")
+
+    def get_strategy(self):
+        return self.strategy_instance
 
 # Singleton
 algo_state_manager = AlgoStateManager()

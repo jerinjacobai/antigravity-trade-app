@@ -1,13 +1,24 @@
 import asyncio
-import os
 from dotenv import load_dotenv
-from app.core.config import get_logger, settings
+from app.core.config import get_logger
 from app.core.supabase_client import supabase
+from app.core.event_manager import event_manager
 from app.engine.algo_state_manager import algo_state_manager
+from app.engine.market_data import market_data_service
+from app.engine.virtual_engine import virtual_execution_engine
 
 # Load Env
 load_dotenv()
 logger = get_logger("worker")
+
+def strategy_tick_listener(data):
+    """
+    Sync callback to bridge EventManager with Async Strategy.
+    """
+    strategy = algo_state_manager.get_strategy()
+    if strategy and strategy.active:
+        # Fire and forget (or track task if robust)
+        asyncio.create_task(strategy.on_tick(data))
 
 async def main():
     logger.info("🚀 QuantMind Algo Worker Starting...")
@@ -16,36 +27,31 @@ async def main():
         logger.critical("Supabase connection failed. Exiting.")
         return
 
+    # 1. Initialize Managers
+    # For V1, we assume a single user context or iterate users. 
+    # For now, we init for the primary admin user (TODO: Multi-tenant loop)
+    # We will let dashboard/API drive the 'lock' and this worker just respects the global state.
+    
+    # Subscribe Strategy to Market Ticks
+    event_manager.subscribe("market_tick", strategy_tick_listener)
+
+    # Start Market Data Service
+    logger.info("Starting Market Data Service...")
+    await market_data_service.start()
+
     # Main Loop
     while True:
         try:
-            # 1. Sync State with DB
-            # For V1, we poll every 5 seconds. In V2, use Realtime Subscription.
-            response = supabase.table("daily_state").select("*").eq("date", "now()").execute()
-            data = response.data
+            # 2. Daily State Sync (Heartbeat / Lock Check)
+            # In V3.1, AlgoStateManager manages state via DB interaction
+            # We can trigger a refresh if needed, but it should be reactive.
+            # Here we just keep the event loop alive and perform housekeeping.
             
-            if data:
-                remote_state = data[0]
-                algo = remote_state.get("algo_name")
-                running = remote_state.get("is_running")
-                
-                if algo and algo != algo_state_manager.selected_algo:
-                    logger.info(f"Received new Algo Command: {algo}")
-                    algo_state_manager.selected_algo = algo
-                    algo_state_manager.is_locked = True
-                
-                if running:
-                    # Run Strategy Step
-                    # In a real event loop, this would tick the strategy
-                    # For demo, we just log heartbeat
-                     pass
-            
-            # 2. Virtual Engine Sync (Paper Orders)
-            from app.engine.virtual_engine import virtual_execution_engine
-            if algo_state_manager.current_state and algo_state_manager.current_state.get("mode") == "paper":
+            # 3. Virtual Engine Housekeeping (Paper Orders)
+            if algo_state_manager.get_mode() == "paper":
                 await virtual_execution_engine.sync_pending_orders()
             
-            await asyncio.sleep(5)
+            await asyncio.sleep(1)
             
         except Exception as e:
             logger.error(f"Worker Loop Error: {e}")
@@ -56,3 +62,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Worker Stopping...")
+        market_data_service.stop()
