@@ -1,6 +1,5 @@
 import { Root, load } from 'protobufjs';
 
-type MarketCallback = (data: any) => void;
 type EventType = 'open' | 'close' | 'message' | 'error' | 'reconnecting';
 
 class MarketSocket {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { cn } from '../lib/utils';
-import { ArrowDown, ArrowUp } from 'lucide-react';
+// Arrows removed as they were unused
 
 interface Quote {
     bidP: number;

@@ -1,4 +1,3 @@
-type PortfolioCallback = (data: any) => void;
 type EventType = 'open' | 'close' | 'message' | 'error' | 'reconnecting';
 
 class PortfolioSocket {
@@ -13,7 +12,11 @@ class PortfolioSocket {
     private retryCount: number = 0;
     private reconnectTimer: any = null;
 
-    private isConnected: boolean = false;
+    private _isConnected: boolean = false;
+
+    public get isConnected(): boolean {
+        return this._isConnected;
+    }
 
     // Callbacks
     public on(event: EventType, callback: Function) {
@@ -47,7 +50,7 @@ class PortfolioSocket {
 
             this.socket.onopen = () => {
                 console.log("Portfolio Socket Connected");
-                this.isConnected = true;
+                this._isConnected = true;
                 this.retryCount = 0;
                 this.emit('open');
             };
@@ -66,7 +69,7 @@ class PortfolioSocket {
 
             this.socket.onclose = () => {
                 console.log("Portfolio Socket Closed");
-                this.isConnected = false;
+                this._isConnected = false;
                 this.emit('close');
                 this.handleReconnect();
             };
