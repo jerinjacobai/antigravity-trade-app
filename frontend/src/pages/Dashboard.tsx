@@ -9,6 +9,8 @@ import PaperWalletCard from '../components/PaperWalletCard';
 import ManualTradePanel from '../components/ManualTradePanel';
 import PaperAnalytics from '../components/PaperAnalytics';
 import AlgoHealthPanel from '../components/AlgoHealthPanel';
+import OptionGreeksPanel from '../components/OptionGreeksPanel';
+import MarketDepthPanel from '../components/MarketDepthPanel';
 
 // Types
 interface Log {
@@ -50,6 +52,8 @@ const Dashboard = () => {
     const [niftyPrice, setNiftyPrice] = useState<number | null>(null);
     const [sensexPrice, setSensexPrice] = useState<number | null>(null);
     const [dataSource, setDataSource] = useState<'PUBLIC' | 'BROKER'>('PUBLIC');
+    // State for Rich Data
+    const [fullFeedData, setFullFeedData] = useState<any>(null); // Store entire feed object for selected symbol
     const navigate = useNavigate();
 
     // Derived State for compatibility
@@ -76,6 +80,12 @@ const Dashboard = () => {
             if (data?.upstox_access_token) {
                 const { marketSocket } = await import('../services/MarketSocket');
                 await marketSocket.connect(data.upstox_access_token);
+
+                // Subscribe to Index AND a Sample Option for demo (NIFTY 22000 CE etc not dynamic yet, so just generic)
+                // Or we can rely on what the user's dashboard is configured for.
+                // For now, let's keep Nifty/Sensex and assume if they have Greeks they will show up.
+                marketSocket.subscribe(['NSE_INDEX|Nifty 50', 'BSE_INDEX|SENSEX'], 'full_d30');
+
                 // New Event Listener Pattern
                 const handleMessage = (feedMethod: any) => {
                     // Check feed structure based on Proto
@@ -84,29 +94,31 @@ const Dashboard = () => {
 
                         // NIFTY
                         const nifty = feeds['NSE_INDEX|Nifty 50'];
-                        if (nifty?.ltpc?.ltp) {
-                            setNiftyPrice(nifty.ltpc.ltp);
+                        if (nifty) {
+                            // Update Price
+                            if (nifty?.ltpc?.ltp) setNiftyPrice(nifty.ltpc.ltp);
+                            else if (nifty?.fullFeed?.marketFF?.ltpc?.ltp) setNiftyPrice(nifty.fullFeed.marketFF.ltpc.ltp);
+                            else if (nifty?.fullFeed?.indexFF?.ltpc?.ltp) setNiftyPrice(nifty.fullFeed.indexFF.ltpc.ltp);
+
                             setDataSource('BROKER');
-                        } else if (nifty?.fullFeed?.marketFF?.ltpc?.ltp) {
-                            setNiftyPrice(nifty.fullFeed.marketFF.ltpc.ltp);
-                            setDataSource('BROKER');
-                        } else if (nifty?.fullFeed?.indexFF?.ltpc?.ltp) {
-                            setNiftyPrice(nifty.fullFeed.indexFF.ltpc.ltp);
-                            setDataSource('BROKER');
+
+                            // Capture Full Feed for Nifty to show extra data if available (Indices usually mostly OHLC)
+                            setFullFeedData(nifty);
                         }
 
                         // SENSEX
                         const sensex = feeds['BSE_INDEX|SENSEX'];
-                        if (sensex?.ltpc?.ltp) {
-                            setSensexPrice(sensex.ltpc.ltp);
-                        } else if (sensex?.fullFeed?.indexFF?.ltpc?.ltp) {
-                            setSensexPrice(sensex.fullFeed.indexFF.ltpc.ltp);
+                        if (sensex) {
+                            if (sensex?.ltpc?.ltp) setSensexPrice(sensex.ltpc.ltp);
+                            else if (sensex?.fullFeed?.indexFF?.ltpc?.ltp) setSensexPrice(sensex.fullFeed.indexFF.ltpc.ltp);
                         }
+
+                        // If we subscribed to an option (e.g. from a future Selector), handle it here.
+                        // For now, if Nifty has extras, we show them.
                     }
                 };
 
                 marketSocket.on('message', handleMessage);
-                marketSocket.subscribe(['NSE_INDEX|Nifty 50', 'BSE_INDEX|SENSEX'], 'full_d30');
 
                 return () => {
                     marketSocket.disconnect();
@@ -249,6 +261,29 @@ const Dashboard = () => {
                             </div>
                         </div>
                     </div>
+
+                    {/* NEW: Extended Market Data (Greeks & Depth) */}
+                    {fullFeedData?.fullFeed?.marketFF && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                            {fullFeedData.fullFeed.marketFF.optionGreeks && (
+                                <div className="col-span-1 md:col-span-2">
+                                    <OptionGreeksPanel
+                                        symbol="NIfty 50"
+                                        greeks={fullFeedData.fullFeed.marketFF.optionGreeks}
+                                        iv={fullFeedData.fullFeed.marketFF.iv}
+                                        oi={fullFeedData.fullFeed.marketFF.oi}
+                                    />
+                                </div>
+                            )}
+
+                            {fullFeedData.fullFeed.marketFF.marketLevel?.bidAskQuote && (
+                                <MarketDepthPanel
+                                    symbol="NIFTY DEPTH"
+                                    data={fullFeedData.fullFeed.marketFF.marketLevel.bidAskQuote}
+                                />
+                            )}
+                        </div>
+                    )}
 
                     {/* Mode Specific Panel: Paper Wallet vs Live Risk */}
                     {mode === 'PAPER' ? (
