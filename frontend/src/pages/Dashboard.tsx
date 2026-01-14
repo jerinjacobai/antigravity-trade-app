@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { getSystemStatus, startSimulation } from '../services/api';
+import { getUpstoxMarketStatus } from '../services/upstox';
 import { cn } from '../lib/utils';
-import { LineChart, ShieldAlert, Terminal, Play, Activity } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Activity, Play, Settings, ShieldAlert, Wifi, LineChart, Terminal } from 'lucide-react';
 import PaperWalletCard from '../components/PaperWalletCard';
 import ManualTradePanel from '../components/ManualTradePanel';
 import PaperAnalytics from '../components/PaperAnalytics';
@@ -22,26 +24,57 @@ interface Tick {
     source?: 'PUBLIC' | 'BROKER';
 }
 
+interface AlgoState {
+    algo_name: string | null;
+    mode: 'live' | 'paper';
+    locked: boolean;
+}
+
+interface RiskStats {
+    pnl: number;
+    trades: number;
+    max_trades: number;
+}
+
+// interface SystemStatusResponse removed
+
 const Dashboard = () => {
     const [logs, setLogs] = useState<Log[]>([]);
-    const [niftyPrice, setNiftyPrice] = useState<number>(21500.00);
-    const [sensexPrice, setSensexPrice] = useState<number>(71500.00);
-    const [risk, setRisk] = useState({ pnl: 0, trades: 0, max_trades: 25 });
-    const [activeAlgo, setActiveAlgo] = useState<string | null>(null);
-    const [mode, setMode] = useState<'LIVE' | 'PAPER'>('PAPER'); // Default to Paper for safety
+    const [status, setStatus] = useState<AlgoState>({
+        algo_name: null,
+        mode: 'paper',
+        locked: false
+    });
+    const [marketStatus, setMarketStatus] = useState<string | null>(null);
+    const [risk, setRisk] = useState<RiskStats>({ pnl: 0, trades: 0, max_trades: 25 });
+    const [niftyPrice, setNiftyPrice] = useState<number | null>(null);
+    const [sensexPrice, setSensexPrice] = useState<number | null>(null);
     const [dataSource, setDataSource] = useState<'PUBLIC' | 'BROKER'>('PUBLIC');
+    const navigate = useNavigate();
+
+    // Derived State for compatibility
+    const activeAlgo = status.algo_name;
+    const mode = status.mode === 'live' ? 'LIVE' : 'PAPER';
+
+    const loadData = async () => {
+        try {
+            const data = await getSystemStatus();
+            setStatus(data.algo_state);
+            setRisk(data.risk_stats);
+
+            // Fetch Upstox Status
+            const upstoxData = await getUpstoxMarketStatus('NSE');
+            if (upstoxData?.data?.status) {
+                setMarketStatus(upstoxData.data.status);
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    };
 
     useEffect(() => {
-        // 1. Initial Fetch
-        const init = async () => {
-            const status = await getSystemStatus();
-            setRisk(prev => ({ ...prev, ...status.risk_stats })); // Merge
-            setActiveAlgo(status.algo_state.algo_name);
-            setMode(status.algo_state.mode === 'live' ? 'LIVE' : 'PAPER');
-        };
-        init();
+        loadData();
 
-        // 2. Realtime Subscriptions
         // 2. Realtime Subscriptions
         const channel = supabase.channel('dashboard_realtime')
             // Listen for System Events (Logs)
@@ -135,7 +168,7 @@ const Dashboard = () => {
                                 <LineChart size={14} /> NSE INDEX
                             </div>
                             <div className="text-3xl md:text-5xl font-black tracking-tighter text-white group-hover:scale-105 transition-transform duration-500 mt-4 md:mt-0">
-                                {niftyPrice.toFixed(2)}
+                                {(niftyPrice || 0).toFixed(2)}
                             </div>
                             <div className="text-green-500 mt-2 font-medium flex items-center gap-2 text-sm md:text-base">
                                 NIFTY 50 <span className="text-xs bg-green-500/10 px-2 py-0.5 rounded">+0.45%</span>
@@ -148,7 +181,7 @@ const Dashboard = () => {
                                 <LineChart size={14} /> BSE INDEX
                             </div>
                             <div className="text-3xl md:text-5xl font-black tracking-tighter text-white group-hover:scale-105 transition-transform duration-500 mt-4 md:mt-0">
-                                {sensexPrice.toFixed(2)}
+                                {(sensexPrice || 0).toFixed(2)}
                             </div>
                             <div className="text-green-500 mt-2 font-medium flex items-center gap-2 text-sm md:text-base">
                                 SENSEX <span className="text-xs bg-green-500/10 px-2 py-0.5 rounded">+0.21%</span>
@@ -161,8 +194,8 @@ const Dashboard = () => {
                         <div className="flex flex-col gap-4">
                             <PaperWalletCard />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <ManualTradePanel symbol="NIFTY" spotPrice={niftyPrice} onOrderPlaced={handlePaperOrder} />
-                                <ManualTradePanel symbol="SENSEX" spotPrice={sensexPrice} onOrderPlaced={handlePaperOrder} />
+                                <ManualTradePanel symbol="NIFTY" spotPrice={niftyPrice || 0} onOrderPlaced={handlePaperOrder} />
+                                <ManualTradePanel symbol="SENSEX" spotPrice={sensexPrice || 0} onOrderPlaced={handlePaperOrder} />
                             </div>
                         </div>
                     ) : (
@@ -253,6 +286,22 @@ const Dashboard = () => {
                                 <Terminal size={16} /> SYSTEM LOGS
                             </div>
                             <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-xs">
+                                <div className="flex items-center gap-4">
+                                    <div className={`px-3 py-1 rounded-full text-xs font-medium border flex items-center gap-2 ${marketStatus === 'NORMAL_OPEN' || marketStatus === 'OPEN'
+                                        ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                                        : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                                        }`}>
+                                        <Wifi size={12} />
+                                        {marketStatus ? `NSE: ${marketStatus}` : 'NSE: DISCONNECTED'}
+                                    </div>
+                                    <button onClick={() => navigate('/settings')} className="p-2 hover:bg-zinc-800 rounded-full transition-colors relative">
+                                        <Settings size={20} className="text-zinc-400" />
+                                        <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                                    </button>
+                                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-xs ring-2 ring-zinc-900">
+                                        OP
+                                    </div>
+                                </div>
                                 {logs.map((log, i) => (
                                     <div key={i} className="flex gap-2">
                                         <span className="text-zinc-600">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
