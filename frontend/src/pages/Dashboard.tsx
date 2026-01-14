@@ -56,6 +56,69 @@ const Dashboard = () => {
     const activeAlgo = status.algo_name;
     const mode = status.mode === 'live' ? 'LIVE' : 'PAPER';
 
+    // Market Socket Integration
+    useEffect(() => {
+        const initSocket = async () => {
+            // For now, we use a mocked token or fetch from DB if needed.
+            // In a real app, this should come from your backend auth exchange.
+            // User provided "mock token" logic in previous steps, but we need a valid token for Upstox V3.
+            // Since we don't have a real token flow fully working yet, this might fail to connect,
+            // but the structure is correct.
+
+            // We'll try to get it from the profile if available
+            // const { data } = await supabase.from('user_profiles').select('upstox_access_token').single();
+            // if (data?.upstox_access_token) {
+            //    marketSocket.connect(data.upstox_access_token);
+            // }
+
+            // Connect & Subscribe
+            // NOTE: Replace 'YOUR_ACCESS_TOKEN' with real token mechanism
+            const { data } = await supabase.from('user_profiles').select('upstox_access_token').single();
+            if (data?.upstox_access_token) {
+                const { marketSocket } = await import('../services/MarketSocket');
+                await marketSocket.connect(data.upstox_access_token);
+                marketSocket.subscribe(['NSE_INDEX|Nifty 50', 'BSE_INDEX|SENSEX']);
+
+                const cleanup = marketSocket.onMessage((feedMethod: any) => {
+                    // Check feed structure based on Proto
+                    // "feeds" map<string, Feed>
+                    if (feedMethod?.feeds) {
+                        const feeds = feedMethod.feeds;
+
+                        // NIFTY
+                        const nifty = feeds['NSE_INDEX|Nifty 50'];
+                        if (nifty?.ltpc?.ltp) {
+                            setNiftyPrice(nifty.ltpc.ltp);
+                            setDataSource('BROKER'); // Switch to Broker Data
+                        } else if (nifty?.fullFeed?.marketFF?.ltpc?.ltp) {
+                            setNiftyPrice(nifty.fullFeed.marketFF.ltpc.ltp);
+                            setDataSource('BROKER');
+                        }
+                        else if (nifty?.fullFeed?.indexFF?.ltpc?.ltp) {
+                            setNiftyPrice(nifty.fullFeed.indexFF.ltpc.ltp);
+                            setDataSource('BROKER');
+                        }
+
+                        // SENSEX
+                        const sensex = feeds['BSE_INDEX|SENSEX'];
+                        if (sensex?.ltpc?.ltp) {
+                            setSensexPrice(sensex.ltpc.ltp);
+                        } else if (sensex?.fullFeed?.indexFF?.ltpc?.ltp) {
+                            setSensexPrice(sensex.fullFeed.indexFF.ltpc.ltp);
+                        }
+                    }
+                });
+
+                return () => {
+                    cleanup();
+                    marketSocket.disconnect();
+                }
+            }
+        };
+
+        initSocket();
+    }, []);
+
     const loadData = async () => {
         try {
             const data = await getSystemStatus();
