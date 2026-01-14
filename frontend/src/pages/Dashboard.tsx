@@ -71,17 +71,14 @@ const Dashboard = () => {
             //    marketSocket.connect(data.upstox_access_token);
             // }
 
-            // Connect & Subscribe
             // NOTE: Replace 'YOUR_ACCESS_TOKEN' with real token mechanism
             const { data } = await supabase.from('user_profiles').select('upstox_access_token').single();
             if (data?.upstox_access_token) {
                 const { marketSocket } = await import('../services/MarketSocket');
                 await marketSocket.connect(data.upstox_access_token);
-                marketSocket.subscribe(['NSE_INDEX|Nifty 50', 'BSE_INDEX|SENSEX']);
-
-                const cleanup = marketSocket.onMessage((feedMethod: any) => {
+                // New Event Listener Pattern
+                const handleMessage = (feedMethod: any) => {
                     // Check feed structure based on Proto
-                    // "feeds" map<string, Feed>
                     if (feedMethod?.feeds) {
                         const feeds = feedMethod.feeds;
 
@@ -89,12 +86,11 @@ const Dashboard = () => {
                         const nifty = feeds['NSE_INDEX|Nifty 50'];
                         if (nifty?.ltpc?.ltp) {
                             setNiftyPrice(nifty.ltpc.ltp);
-                            setDataSource('BROKER'); // Switch to Broker Data
+                            setDataSource('BROKER');
                         } else if (nifty?.fullFeed?.marketFF?.ltpc?.ltp) {
                             setNiftyPrice(nifty.fullFeed.marketFF.ltpc.ltp);
                             setDataSource('BROKER');
-                        }
-                        else if (nifty?.fullFeed?.indexFF?.ltpc?.ltp) {
+                        } else if (nifty?.fullFeed?.indexFF?.ltpc?.ltp) {
                             setNiftyPrice(nifty.fullFeed.indexFF.ltpc.ltp);
                             setDataSource('BROKER');
                         }
@@ -107,10 +103,12 @@ const Dashboard = () => {
                             setSensexPrice(sensex.fullFeed.indexFF.ltpc.ltp);
                         }
                     }
-                });
+                };
+
+                marketSocket.on('message', handleMessage);
+                marketSocket.subscribe(['NSE_INDEX|Nifty 50', 'BSE_INDEX|SENSEX'], 'full_d30');
 
                 return () => {
-                    cleanup();
                     marketSocket.disconnect();
                 }
             }
