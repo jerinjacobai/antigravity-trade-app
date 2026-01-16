@@ -24,10 +24,25 @@ class EventManager:
                 except Exception as e:
                     logger.error(f"Error in subscriber: {e}")
 
-        # 2. Cloud Persistence (Supabase)
-        # We only persist important logs/events. High-freq ticks are NOT persisted to DB logs.
-        if event_type in ["system_log", "trade_log", "error", "algo_status"]:
+        # 2. Cloud Persistence & Broadcast
+        # High-freq ticks are broadcasted via Realtime, NOT persisted to DB logs.
+        if event_type == "market_tick":
+            self._broadcast_tick(data)
+        elif event_type in ["system_log", "trade_log", "error", "algo_status"]:
              self._log_to_db(event_type, data)
+
+    def _broadcast_tick(self, data):
+        if not supabase: return
+        try:
+            # Broadcast to 'dashboard_realtime' channel
+            # Note: Python client usage for broadcast might vary by version. 
+            # We assume standard realtime channel emit.
+            channel = supabase.channel('dashboard_realtime')
+            channel.broadcast({'event': 'market_tick', 'payload': data}).send()
+        except Exception as e:
+            # high frequency error log suppression might be needed here
+            # for now, we just print to console/logger to avoid DB spam
+             logger.error(f"Broadcast Failed: {e}")
 
     def _log_to_db(self, level, message):
         if not supabase: return
