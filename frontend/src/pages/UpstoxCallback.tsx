@@ -21,35 +21,18 @@ export default function UpstoxCallback() {
 
     const handleExchange = async (code: string) => {
         try {
-            console.log("Processing Auth Code:", code); // Fix unused var lint
-            // In a real production setup, this 'exchange_token' would be an Edge Function
-            // or a secure backend endpoint to avoid exposing logic.
-            // For this phase, we will invoke a Supabase Function.
+            console.log("Processing Auth Code:", code);
 
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("User not authenticated");
 
-            // Invoke Edge Function (Mocked for now as we haven't deployed it yet)
-            // const { data, error } = await supabase.functions.invoke('exchange-upstox-token', {
-            //    body: { code, user_id: user.id }
-            // });
+            // Invoke Edge Function
+            const { data, error } = await supabase.functions.invoke('exchange-upstox-token', {
+                body: { code, user_id: user.id }
+            });
 
-            // SIMULATION OF SUCCESSFUL EXCHANGE for Phase 3 Demo:
-            // We'll manually store a dummy token to indicate "Connected"
-            // REPLACE THIS with actual API call when Edge Function is ready.
-
-            await new Promise(r => setTimeout(r, 1500)); // Fake network delay
-
-            const { error: dbError } = await supabase
-                .from('user_profiles')
-                .upsert({
-                    user_id: user.id,
-                    upstox_access_token: "chk_" + Math.random().toString(36).substring(7), // Mock Token
-                    token_expiry: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-                    updated_at: new Date().toISOString()
-                });
-
-            if (dbError) throw dbError;
+            if (error) throw error;
+            if (!data?.success) throw new Error(data?.message || 'Exchange failed');
 
             setStatus('success');
             setMessage('Secure Connection Established.');
