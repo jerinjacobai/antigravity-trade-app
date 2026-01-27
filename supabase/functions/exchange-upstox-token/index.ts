@@ -17,46 +17,24 @@ Deno.serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
-        const { code, user_id } = await req.json()
+        const { code, user_id, redirect_uri } = await req.json()
 
         if (!code || !user_id) {
             throw new Error('Missing code or user_id')
         }
 
-        // 1. Get API Key/Secret for user
-        const { data: credentials, error: credError } = await supabaseClient
-            .from('user_credentials')
-            .select('upstox_api_key, upstox_api_secret, is_paper_trading')
-            .eq('user_id', user_id)
-            .single()
-
-        if (credError || !credentials) {
-            console.error('Credential Fetch Error:', credError);
-            throw new Error('Could not find API Credentials for user')
-        }
-
-        const { upstox_api_key, upstox_api_secret } = credentials
+        // ... line 26-38 ...
 
         // 2. Exchange Code for Token with Upstox
         const params = new URLSearchParams()
         params.append('code', code)
         params.append('client_id', upstox_api_key)
         params.append('client_secret', upstox_api_secret)
-        params.append('redirect_uri', req.headers.get('origin') ? `${req.headers.get('origin')}/callback` : '') // Try to infer or fallback
+
+        // Use provided URI or fallback to origin
+        const finalRedirectUri = redirect_uri || (req.headers.get('origin') + '/callback')
+        params.append('redirect_uri', finalRedirectUri)
         params.append('grant_type', 'authorization_code')
-
-        // Note: redirect_uri must match exactly what was sent in the login request.
-        // The frontend sends `window.location.origin + '/callback'`, so we need to match that.
-        // The req.headers.get('origin') should give us the frontend domain.
-        // Ideally, pass redirect_uri from frontend payload to be safe.
-
-        // REVISIT: Let's assume standard formatting or pass it in body if this fails.
-        // For now, let's try to construct it or ask frontend to send it.
-        // The previous frontend code was: `window.location.origin + '/callback'`
-        // We will hardcode https/http detection or just rely on Origin header + /callback
-
-        const redirectUri = req.headers.get('origin') + '/callback'
-        params.set('redirect_uri', redirectUri)
 
 
         console.log(`Exchanging token for user ${user_id} with redirect_uri: ${redirectUri}`)

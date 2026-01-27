@@ -45,7 +45,11 @@ export default function UpstoxCallback() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ code, user_id: user.id })
+                body: JSON.stringify({
+                    code,
+                    user_id: user.id,
+                    redirect_uri: window.location.origin + '/callback'
+                })
             });
 
             let data;
