@@ -22,7 +22,7 @@ export default function PaperWalletCard() {
                 .from('paper_wallet')
                 .select('*')
                 .eq('user_id', user.id)
-                .single();
+                .maybeSingle();
 
             if (error) throw error;
             setWallet(data);

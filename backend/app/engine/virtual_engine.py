@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 from typing import Dict, Optional
 from datetime import datetime
 from app.core.config import get_logger
@@ -24,10 +25,18 @@ class VirtualExecutionEngine:
         order_type = order_request.get("order_type") # MARKET/LIMIT
         price = order_request.get("price", 0.0) # Limit Price
 
-        # 1. Get Current Market Price (LTP)
-        ltp = await market_data_service.get_ltp(symbol)
+        # 1. Resolve Symbol (Map friendly names to Instrument Keys)
+        instrument_key = symbol
+        if symbol == "NIFTY": instrument_key = "NSE_INDEX|Nifty 50"
+        elif symbol == "SENSEX": instrument_key = "BSE_INDEX|SENSEX"
+        elif symbol == "BANKNIFTY": instrument_key = "NSE_INDEX|Nifty Bank"
+
+        logger.info(f"Resolved Symbol: {symbol} -> Key: {instrument_key}")
+
+        # 2. Get Current Market Price (LTP)
+        ltp = await market_data_service.get_ltp(instrument_key)
         if not ltp:
-            logger.error(f"Cannot place paper order: LTP not available for {symbol}")
+            logger.error(f"Cannot place paper order: LTP not available for {instrument_key}")
             return {"status": "REJECTED", "message": "Market Data Unavailable"}
 
         # 2. Virtual Wallet Check (Margin)
@@ -40,7 +49,9 @@ class VirtualExecutionEngine:
              return {"status": "REJECTED", "message": "Insufficient Virtual Margin"}
 
         # 3. Create Order Record (PENDING)
+        new_order_id = str(uuid.uuid4())
         order_payload = {
+            "order_id": new_order_id,
             "user_id": user_id,
             "symbol": symbol,
             "transaction_type": transaction_type,
@@ -174,12 +185,33 @@ class VirtualExecutionEngine:
                 return
 
             orders = res.data
+            logger.info(f"Sync: Found {len(orders)} PENDING orders")
             for order in orders:
                 symbol = order["symbol"]
                 order_type = order["order_type"]
                 
+                # Resolve Key
+                instrument_key = symbol
+                if symbol == "NIFTY": instrument_key = "NSE_INDEX|Nifty 50"
+                elif symbol == "SENSEX": instrument_key = "BSE_INDEX|SENSEX"
+                elif symbol == "BANKNIFTY": instrument_key = "NSE_INDEX|Nifty Bank"
+                elif " " in symbol:
+                     # Dynamic Lookup for Options (e.g. NIFTY 21600 CE)
+                     from app.core.upstox_client import upstox_app
+                     res = upstox_app.search_instrument(symbol)
+                     if res: 
+                         instrument_key = res.get("instrument_key")
+                         logger.info(f"Resolved Option: {symbol} -> {instrument_key}")
+                     else:
+                         logger.warning(f"Could not resolve instrument: {symbol}. Rejecting Order.")
+                         supabase.table("paper_orders").update({
+                             "status": "REJECTED",
+                             "message": "Invalid Symbol (No Expiry?)"
+                         }).eq("order_id", order["order_id"]).execute()
+                         continue
+                
                 # Get current market price
-                ltp = await market_data_service.get_ltp(symbol)
+                ltp = await market_data_service.get_ltp(instrument_key)
                 if not ltp:
                     continue # Skip if price not available yet
 

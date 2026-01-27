@@ -6,13 +6,13 @@ export const getSystemStatus = async () => {
         .from('daily_state')
         .select('*')
         .eq('date', new Date().toISOString().split('T')[0])
-        .single();
+        .maybeSingle();
 
     const { data: risk } = await supabase
         .from('risk_state')
         .select('*')
         .eq('date', new Date().toISOString().split('T')[0])
-        .single();
+        .maybeSingle();
 
     return {
         algo_state: state || { algo: null, locked: false },

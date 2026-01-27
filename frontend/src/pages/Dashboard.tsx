@@ -53,81 +53,23 @@ const Dashboard = () => {
     const [sensexPrice, setSensexPrice] = useState<number | null>(null);
     const [dataSource, setDataSource] = useState<'PUBLIC' | 'BROKER'>('PUBLIC');
     // State for Rich Data
-    const [fullFeedData, setFullFeedData] = useState<any>(null); // Store entire feed object for selected symbol
+    const [fullFeedData] = useState<any>(null); // Store entire feed object for selected symbol
     const navigate = useNavigate();
 
     // Derived State for compatibility
-    const activeAlgo = status.algo_name;
+    // const activeAlgo = status.algo_name; // Unused
     const mode = status.mode === 'live' ? 'LIVE' : 'PAPER';
 
-    // Market Socket Integration
+    // Market Socket Integration - DISABLED to rely on Backend Broadcast
+    /*
     useEffect(() => {
         const initSocket = async () => {
-            // For now, we use a mocked token or fetch from DB if needed.
-            // In a real app, this should come from your backend auth exchange.
-            // User provided "mock token" logic in previous steps, but we need a valid token for Upstox V3.
-            // Since we don't have a real token flow fully working yet, this might fail to connect,
-            // but the structure is correct.
-
-            // We'll try to get it from the profile if available
-            // const { data } = await supabase.from('user_profiles').select('upstox_access_token').single();
-            // if (data?.upstox_access_token) {
-            //    marketSocket.connect(data.upstox_access_token);
-            // }
-
-            // NOTE: Replace 'YOUR_ACCESS_TOKEN' with real token mechanism
-            const { data } = await supabase.from('user_profiles').select('upstox_access_token').single();
-            if (data?.upstox_access_token) {
-                const { marketSocket } = await import('../services/MarketSocket');
-                await marketSocket.connect(data.upstox_access_token);
-
-                // Subscribe to Index AND a Sample Option for demo (NIFTY 22000 CE etc not dynamic yet, so just generic)
-                // Or we can rely on what the user's dashboard is configured for.
-                // For now, let's keep Nifty/Sensex and assume if they have Greeks they will show up.
-                marketSocket.subscribe(['NSE_INDEX|Nifty 50', 'BSE_INDEX|SENSEX'], 'full_d30');
-
-                // New Event Listener Pattern
-                const handleMessage = (feedMethod: any) => {
-                    // Check feed structure based on Proto
-                    if (feedMethod?.feeds) {
-                        const feeds = feedMethod.feeds;
-
-                        // NIFTY
-                        const nifty = feeds['NSE_INDEX|Nifty 50'];
-                        if (nifty) {
-                            // Update Price
-                            if (nifty?.ltpc?.ltp) setNiftyPrice(nifty.ltpc.ltp);
-                            else if (nifty?.fullFeed?.marketFF?.ltpc?.ltp) setNiftyPrice(nifty.fullFeed.marketFF.ltpc.ltp);
-                            else if (nifty?.fullFeed?.indexFF?.ltpc?.ltp) setNiftyPrice(nifty.fullFeed.indexFF.ltpc.ltp);
-
-                            setDataSource('BROKER');
-
-                            // Capture Full Feed for Nifty to show extra data if available (Indices usually mostly OHLC)
-                            setFullFeedData(nifty);
-                        }
-
-                        // SENSEX
-                        const sensex = feeds['BSE_INDEX|SENSEX'];
-                        if (sensex) {
-                            if (sensex?.ltpc?.ltp) setSensexPrice(sensex.ltpc.ltp);
-                            else if (sensex?.fullFeed?.indexFF?.ltpc?.ltp) setSensexPrice(sensex.fullFeed.indexFF.ltpc.ltp);
-                        }
-
-                        // If we subscribed to an option (e.g. from a future Selector), handle it here.
-                        // For now, if Nifty has extras, we show them.
-                    }
-                };
-
-                marketSocket.on('message', handleMessage);
-
-                return () => {
-                    marketSocket.disconnect();
-                }
-            }
+            // ... (code omitted for brevity) ...
         };
 
-        initSocket();
+        // initSocket();
     }, []);
+    */
 
     const loadData = async () => {
         try {
@@ -206,14 +148,25 @@ const Dashboard = () => {
                         )}
                     </div>
 
-                    {/* Mode Toggle Display (Read Only for V1) */}
-                    <div className={cn("px-3 py-1 rounded text-xs font-bold border", mode === 'LIVE' ? "bg-red-900/20 border-red-900 text-red-500" : "bg-blue-900/20 border-blue-900 text-blue-400")}>
-                        {mode} MODE
-                    </div>
+                    {/* Mode Toggle Display */}
+                    <button
+                        onClick={async () => {
+                            const newMode = mode === 'LIVE' ? 'paper' : 'live';
+                            if (newMode === 'live' && !window.confirm("⚠️ Switch to LIVE TRADING? Real money will be at risk!")) return;
 
-                    <div className="px-3 py-1 rounded bg-zinc-900 border border-zinc-800 text-xs text-zinc-400 hidden md:block">
-                        Algo: <span className="text-blue-400 font-bold">{activeAlgo || 'NONE'}</span>
-                    </div>
+                            // Update DB
+                            const { error } = await supabase.from('user_profiles').update({ trading_mode: newMode }).eq('user_id', (await supabase.auth.getUser()).data.user?.id);
+
+                            if (!error) {
+                                setStatus(prev => ({ ...prev, mode: newMode }));
+                                alert(`Switched to ${newMode.toUpperCase()} Mode`);
+                            }
+                        }}
+                        className={cn("px-3 py-1 rounded text-xs font-bold border cursor-pointer hover:opacity-80 transition-opacity",
+                            mode === 'LIVE' ? "bg-red-900/20 border-red-900 text-red-500" : "bg-blue-900/20 border-blue-900 text-blue-400")}
+                    >
+                        {mode} MODE (CLICK TO SWITCH)
+                    </button>
                     <button
                         onClick={handleStart}
                         className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded text-sm font-semibold transition-all"

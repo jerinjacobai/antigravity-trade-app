@@ -1,11 +1,11 @@
 import os
 from supabase import create_client, Client
-from app.core.config import get_logger
+from app.core.config import get_logger, settings
 
 logger = get_logger("supabase_client")
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+SUPABASE_URL = settings.SUPABASE_URL
+SUPABASE_KEY = settings.SUPABASE_KEY
 
 try:
     if SUPABASE_URL and SUPABASE_KEY:

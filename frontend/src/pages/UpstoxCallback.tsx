@@ -26,12 +26,47 @@ export default function UpstoxCallback() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("User not authenticated");
 
-            // Invoke Edge Function
-            const { data, error } = await supabase.functions.invoke('exchange-upstox-token', {
-                body: { code, user_id: user.id }
+            // Invoke Edge Function via Fetch for debugging
+            // const { data, error } = await supabase.functions.invoke('exchange-upstox-token', { ... });
+
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+
+            console.log("Debug: Using Token:", token ? "YES (Length " + token.length + ")" : "NO");
+
+            // Construct URL dynamically
+            // Extract project ref from URL or just use the known structure
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const functionUrl = `${supabaseUrl}/functions/v1/exchange-upstox-token`;
+
+            const response = await fetch(functionUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ code, user_id: user.id })
             });
 
-            if (error) throw error;
+            let data;
+            try {
+                data = await response.json();
+            } catch (e) {
+                console.error("Failed to parse JSON response");
+                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+            }
+
+            if (!response.ok) {
+                console.error("Function Error Response:", data);
+                throw new Error(data.message || `Function failed with status ${response.status}`);
+            }
+
+            // Standardize success check
+            if (!data.success && !data.message) {
+                // Sometimes success true is implicit if 200 OK
+            }
+
+
             if (!data?.success) throw new Error(data?.message || 'Exchange failed');
 
             setStatus('success');
@@ -42,7 +77,10 @@ export default function UpstoxCallback() {
             }, 2000);
 
         } catch (error: any) {
-            console.error(error);
+            console.error("Upstox Auth Error Details:", error);
+            if (error && typeof error === 'object') {
+                console.log("Error Context:", JSON.stringify(error, null, 2));
+            }
             setStatus('error');
             setMessage(error.message || 'Token exchange failed.');
         }

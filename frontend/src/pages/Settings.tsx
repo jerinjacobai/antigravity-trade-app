@@ -65,15 +65,15 @@ export default function Settings() {
             });
 
         // Sync to legacy table for backend compat until full migration
-        await supabase.from('user_credentials').upsert({
+        const { error: credError } = await supabase.from('user_credentials').upsert({
             user_id: user.id,
             upstox_api_key: apiKey,
             upstox_api_secret: apiSecret,
             is_paper_trading: paperMode
         });
 
-        if (error) {
-            alert('Error saving profile: ' + error.message);
+        if (error || credError) {
+            alert('Error saving profile: ' + (error?.message || credError?.message));
         } else {
             alert('Configuration Secured.');
         }

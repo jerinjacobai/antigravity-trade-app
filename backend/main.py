@@ -7,6 +7,7 @@ from app.engine.algo_state_manager import algo_state_manager
 from app.engine.market_data import market_data_service
 from app.engine.virtual_engine import virtual_execution_engine
 from app.core.health_monitor import health_monitor
+from app.core.upstox_client import upstox_app
 
 # Load Env
 load_dotenv()
@@ -30,6 +31,16 @@ async def main():
 
     # Log Startup
     event_manager.log_system_event("STARTUP", "WORKER", "INFO", "QuantMind Worker Process Started")
+
+    # Initialize Event Manager (Async)
+    await event_manager.initialize()
+
+    # 0. Initialize Upstox Session
+    logger.info("Initializing Upstox Session...")
+    if upstox_app.initialize_session():
+        event_manager.log_system_event("AUTH", "UPSTOX", "INFO", "Upstox Session Active")
+    else:
+        logger.warning("Upstox Session Failed - Running in Offline/Mock Mode")
 
     # 1. Initialize Managers
     # For V1, we assume a single user context or iterate users. 

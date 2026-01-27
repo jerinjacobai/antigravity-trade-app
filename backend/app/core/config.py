@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     UPSTOX_API_SECRET: str = ""
     UPSTOX_REDIRECT_URI: str = "http://localhost:8000/callback"
     LOG_LEVEL: str = "INFO"
+    SUPABASE_URL: str = ""
+    SUPABASE_KEY: str = ""
 
     class Config:
         env_file = ".env"

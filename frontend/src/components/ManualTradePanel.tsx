@@ -28,6 +28,7 @@ export default function ManualTradePanel({ symbol, spotPrice, onOrderPlaced }: M
             }
 
             const { error: dbError } = await supabase.from('paper_orders').insert({
+                order_id: crypto.randomUUID(),
                 user_id: user.id,
                 symbol: selectedSymbol,
                 transaction_type: side,

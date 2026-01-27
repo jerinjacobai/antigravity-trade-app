@@ -29,81 +29,99 @@ class MarketDataAdapter:
 # ==========================================
 # 2. Broker Adapter (Upstox WebSocket)
 # ==========================================
+# ==========================================
+# 2. Broker Adapter (Upstox SDK Streamer)
+# ==========================================
+from upstox_client.feeder.market_data_streamer_v3 import MarketDataStreamerV3
+
 class BrokerDataAdapter(MarketDataAdapter):
     def __init__(self):
-        self.running = False
-        self.ws_url = "wss://api.upstox.com/v2/feed/market-data-feed"
+        self.streamer = None
         self.subscribed_symbols = ["NSE_INDEX|Nifty 50", "BSE_INDEX|SENSEX"]
         self.latest_prices: Dict[str, float] = {}
+        self.running = False
 
     async def start(self):
-        # Ensure Session
         if not upstox_app.access_token:
             logger.error("Broker Adapter: No Access Token")
             return
 
+        logger.info("Broker Adapter: Starting SDK Streamer...")
+        # Capture the main loop
+        self.loop = asyncio.get_running_loop()
+
+        # Initialize Streamer
+        self.streamer = MarketDataStreamerV3(
+            api_client=upstox_app.api_instance.api_client,
+            instrumentKeys=self.subscribed_symbols,
+            mode="full"
+        )
+        
+        # Register Callbacks
+        self.streamer.on("open", self.on_open)
+        self.streamer.on("message", self.on_message)
+        self.streamer.on("error", self.on_error)
+        
+        # Connect (runs in background thread)
+        self.streamer.connect()
         self.running = True
-        logger.info("Broker Adapter: Connecting to Upstox WebSocket...")
-        asyncio.create_task(self._websocket_loop())
 
-    async def _websocket_loop(self):
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
+    def on_open(self, *args):
+        logger.info("Broker Adapter: SDK Streamer Connected")
+        self.running = True
 
-        while self.running:
-            try:
-                async with websockets.connect(
-                    self.ws_url, 
-                    extra_headers={"Authorization": f"Bearer {upstox_app.access_token}"},
-                    ssl=ssl_context
-                ) as websocket:
-                    logger.info("Broker Adapter: Connected")
-                    await self._subscribe_instruments(websocket)
+    def on_error(self, error, *args):
+        logger.error(f"Broker Adapter Error: {error}")
 
-                    async for message in websocket:
-                        if not self.running: break
-                        await self._process_message(message)
-
-            except Exception as e:
-                logger.error(f"Broker WS Error: {e}")
-                await asyncio.sleep(5)
-
-    async def _subscribe_instruments(self, ws):
-        payload = {
-            "guid": "quantmind_v1",
-            "method": "sub",
-            "data": { "mode": "full", "instrumentKeys": self.subscribed_symbols }
-        }
-        await ws.send(json.dumps(payload))
-
-    async def _process_message(self, message):
+    def on_message(self, data):
+        # Bridge to Async Loop
         try:
-            if isinstance(message, bytes): return # Skip binary for V1
-            data = json.loads(message)
-            if 'feeds' in data:
-                for symbol, feed in data['feeds'].items():
-                    price = feed.get('ltpc', {}).get('ltp')
-                    if price:
-                        self.latest_prices[symbol] = price
-                        # Broadcast
-                        event_manager.publish("market_tick", {
+             # data is a dict (decoded from protobuf)
+             if "feeds" in data:
+                 for symbol, feed in data["feeds"].items():
+                     # Handle V3 Structure: feed -> fullFeed -> (indexFF|marketFF) -> ltpc -> ltp
+                     ltpc = feed.get("ltpc")
+                     
+                     if not ltpc:
+                         # Check deep structure for Full Mode
+                         full_feed = feed.get("fullFeed", {})
+                         ltpc = full_feed.get("indexFF", {}).get("ltpc") or \
+                                full_feed.get("marketFF", {}).get("ltpc")
+                                
+                     if ltpc and "ltp" in ltpc:
+                         price = ltpc.get("ltp")
+                         self.latest_prices[symbol] = price
+                         
+                         event_payload = {
                             "symbol": symbol,
                             "price": price,
-                            "timestamp": feed.get('exchangeTimeStamp'),
+                            "timestamp": int(feed.get("exchangeTimeStamp") or datetime.now().timestamp() * 1000),
                             "source": "BROKER"
-                        })
-        except Exception:
-            pass
+                         }
+                         logger.info(f"RX BROKER: {symbol} @ {price} ({event_payload['timestamp']})")
+                         
+                         self._schedule_publish(event_payload)
+        except Exception as e:
+            logger.error(f"Message Processing Error: {e}")
+
+    def _schedule_publish(self, payload):
+        # Use captured loop
+        if self.loop and self.loop.is_running():
+             asyncio.run_coroutine_threadsafe(
+                 event_manager.publish("market_tick", payload), 
+                 self.loop
+             )
 
     async def stop(self):
-        self.running = False
+        if self.streamer:
+            # self.streamer.disconnect() # API might not have disconnect exposed cleanly?
+            # It has close handler.
+            pass
 
     async def get_ltp(self, symbol: str) -> Optional[float]:
         return self.latest_prices.get(symbol) or await self._fetch_snapshot(symbol)
 
     async def _fetch_snapshot(self, symbol: str):
-        # Fallback HTTP call
         quote = upstox_app.get_market_quote([symbol])
         if quote:
             return quote.get(symbol, {}).get("last_price")
@@ -132,7 +150,7 @@ class PublicDataAdapter(MarketDataAdapter):
                 change = random.uniform(-5, 5)
                 self.latest_prices[symbol] += change
                 
-                event_manager.publish("market_tick", {
+                await event_manager.publish("market_tick", {
                     "symbol": symbol,
                     "price": self.latest_prices[symbol],
                     "timestamp": datetime.now().timestamp() * 1000,
@@ -156,7 +174,7 @@ class MarketDataService:
         self.public_adapter = PublicDataAdapter()
         self.active_adapter = self.public_adapter # Default
         self.running_task = None
-        self._check_routing()
+        # self._check_routing() - Moved to start() to avoid async loop issues
 
     def _check_routing(self):
         """
@@ -175,11 +193,16 @@ class MarketDataService:
         else:
             self.active_adapter = self.public_adapter
 
+        if self.active_adapter == self.broker_adapter:
+            logger.info("Switching to BROKER mode. Stopping Public Adapter.")
+            asyncio.create_task(self.public_adapter.stop())
+        elif self.active_adapter == self.public_adapter:
+            if not self.public_adapter.running:
+                 logger.info("Switching to PUBLIC mode. Starting Public Adapter.")
+                 asyncio.create_task(self.public_adapter.start())
+
         if self.active_adapter != previous_adapter:
             logger.info(f"Market Data Switched: {type(previous_adapter).__name__} -> {type(self.active_adapter).__name__}")
-            # In a full specific implementation, we might stop the old one and start the new one.
-            # For V1, we simply rely on lazy start or ensure both are managed.
-            # Let's ensure the active one is running.
 
     async def start(self):
         """
@@ -187,6 +210,9 @@ class MarketDataService:
         so switching is instant, or we can manage state.
         Let's start both but only prioritize 'active_adapter' for get_ltp calls.
         """
+        # Initial Check
+        self._check_routing()
+
         # Start Public (Always Available)
         await self.public_adapter.start()
         
